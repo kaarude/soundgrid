@@ -56,7 +56,8 @@ Sound clip
   screen you watch. Designed for peripheral vision and muscle memory.
 - **Mute / monitor-only / mic-only routing states** — unmissable at a glance, by
   shape and position, not color alone.
-- **Bundled library** — import your own clips; sensible defaults ship in `sounds/`.
+- **Local library** — import your own clips; SoundGrid stores them in the app
+  data directory.
 - **Single `.exe`** — NSIS installer + portable build via `electron-builder`.
 
 ### Supported audio formats
@@ -89,8 +90,8 @@ soundgrid/
 │   │   ├── styles/app.css
 │   │   └── main.ts
 │   └── shared/       # types + IPC channels shared across all processes
-├── sounds/           # default bundled examples
-├── docs/             # product + design notes
+├── PRODUCT.md        # product intent and user model
+├── DESIGN.md         # current design system
 ├── PLAN.html         # the original design plan
 ├── electron-builder.json
 └── vite.config.ts
@@ -151,6 +152,6 @@ For cross-platform builds from any OS via GitHub Actions, see
 ## Contributing
 
 This is early and pre-alpha. The design language and two-bus model are the load-
-bearing decisions; please read [`docs/`](docs/) and [`PLAN.html`](PLAN.html)
-before large changes. PRs that keep the control surface calm and the firing
-surface fun are very welcome.
+bearing decisions; please read [`PRODUCT.md`](PRODUCT.md), [`DESIGN.md`](DESIGN.md),
+and [`PLAN.html`](PLAN.html) before large changes. PRs that keep the control
+surface calm and the firing surface fun are very welcome.

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SoundGrid · preview</title>
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <script>
+      // Stub the Electron preload bridge so the renderer runs in a plain browser.
+      // Provides sample clips so the populated grid state is exercised.
+      // A second mode (?empty=1) returns no clips to exercise the first-run state.
+      const empty = new URLSearchParams(location.search).get("empty") === "1";
+      const SAMPLE = [
+        {
+          id: "1",
+          name: "Air Horn",
+          filePath: "",
+          category: "Hits",
+          volume: 1,
+          loop: false,
+          broadcast: true,
+        },
+        {
+          id: "2",
+          name: "Rain Room",
+          filePath: "",
+          category: "Ambience",
+          volume: 1,
+          loop: true,
+          broadcast: true,
+        },
+        {
+          id: "3",
+          name: "Intro Sting",
+          filePath: "",
+          category: "Stingers",
+          volume: 1,
+          loop: false,
+          broadcast: true,
+        },
+        {
+          id: "4",
+          name: "Crowd Bed",
+          filePath: "",
+          category: "Ambience",
+          volume: 1,
+          loop: true,
+          broadcast: true,
+        },
+        {
+          id: "5",
+          name: "Laser Sweep",
+          filePath: "",
+          category: "FX",
+          volume: 1,
+          loop: false,
+          broadcast: true,
+        },
+        {
+          id: "6",
+          name: "Soft Piano",
+          filePath: "",
+          category: "Music",
+          volume: 1,
+          loop: false,
+          broadcast: true,
+        },
+        {
+          id: "7",
+          name: "Bass Drop",
+          filePath: "",
+          category: "Hits",
+          volume: 1,
+          loop: false,
+          broadcast: true,
+        },
+        {
+          id: "8",
+          name: "Wind Loop",
+          filePath: "",
+          category: "Ambience",
+          volume: 1,
+          loop: true,
+          broadcast: true,
+        },
+      ];
+      const noop = async () => {};
+      window.soundgrid = {
+        getLibrary: async () => (empty ? [] : SAMPLE),
+        importFiles: async (files) => [],
+        removeClip: async (id) => {},
+        updateClip: async (id, patch) => {},
+        getSettings: async () => ({
+          micOutputDeviceId: empty ? null : "cable-out",
+          monitorDeviceId: "headphones",
+          realMicDeviceId: "mic",
+          passthrough: true,
+          masterMicVolume: 0.9,
+          monitorVolume: 0.8,
+          overlap: "stop",
+          headsetOnly: true,
+          micOnly: false,
+          theme: "dark",
+          runOnStartup: false,
+          minimizeToTray: true,
+          autoSelectMic: true,
+        }),
+        setSettings: async (patch) => ({ ...patch }),
+        listDevices: async () => ({
+          micOutputs: [],
+          monitors: [],
+          realMics: [],
+        }),
+        pushDevices: async (d) => d,
+        micPlay: noop,
+        micPause: noop,
+        micResume: noop,
+        micStop: noop,
+        micStopAll: noop,
+        micSetMute: noop,
+        micSetVolume: noop,
+        monitorPlay: noop,
+        monitorPause: noop,
+        monitorStop: noop,
+        monitorSetVolume: noop,
+        registerHotkeys: noop,
+        unregisterHotkeys: noop,
+        pickAudioFiles: async () => [],
+      };
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

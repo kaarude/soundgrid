@@ -2,5 +2,9 @@ node_modules/
 dist/
 release/
 .vite/
+output/
 *.log
 .DS_Store
+shots/
+.playwright-cli/
+.impeccable/
