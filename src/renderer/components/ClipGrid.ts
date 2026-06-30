@@ -1,4 +1,5 @@
 import { icon } from "./icons";
+import { importAudioFiles } from "./library-actions";
 import { store } from "./store";
 import { SoundCard } from "./SoundCard";
 
@@ -63,29 +64,27 @@ function FirstRun(): HTMLElement {
   const s2 = document.createElement("li");
   s2.textContent = "Open Settings and set “Mic output device” to the cable.";
   const s3 = document.createElement("li");
-  s3.textContent = "Import your clips and fire them with Mic.";
+  s3.textContent =
+    "Import clips, then open a clip’s menu to assign a global hotkey.";
   steps.append(s1, s2, s3);
-
-  const cta = document.createElement("button");
-  cta.type = "button";
-  cta.className = "firstrun-cta";
-  cta.append(icon.plus());
-  const ctaLabel = document.createElement("span");
-  ctaLabel.textContent = "Import audio";
-  cta.append(ctaLabel);
-  cta.addEventListener("click", async () => {
-    const files = await window.soundgrid.pickAudioFiles();
-    if (files.length) await window.soundgrid.importFiles(files);
-  });
 
   const settings = document.createElement("button");
   settings.type = "button";
-  settings.className = "firstrun-settings";
-  settings.textContent = "Open routing settings";
+  settings.className = "firstrun-cta";
+  settings.textContent = "Configure routing";
   settings.addEventListener("click", () =>
     store.update({ settingsOpen: true }),
   );
 
-  card.append(iconWrap, title, body, steps, cta, settings);
+  const importButton = document.createElement("button");
+  importButton.type = "button";
+  importButton.className = "firstrun-settings";
+  importButton.append(icon.plus());
+  const importLabel = document.createElement("span");
+  importLabel.textContent = "Import audio";
+  importButton.append(importLabel);
+  importButton.addEventListener("click", () => void importAudioFiles());
+
+  card.append(iconWrap, title, body, steps, settings, importButton);
   return card;
 }

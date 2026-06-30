@@ -59,14 +59,20 @@ async function refreshDevices(): Promise<void> {
     const label = (d: MediaDeviceInfo) =>
       d.label || `Device ${d.deviceId.slice(0, 6)}`;
     store.update({
+      devicesStatus: "ready",
       devices: {
         micOutputs: outs.map((d) => ({ id: d.deviceId, label: label(d) })),
         monitors: outs.map((d) => ({ id: d.deviceId, label: label(d) })),
         realMics: ins.map((d) => ({ id: d.deviceId, label: label(d) })),
       },
     });
-  } catch {
-    // enumerateDevices may reject until mic permission is granted; that's fine.
+  } catch (error) {
+    store.update({
+      devicesStatus:
+        error instanceof DOMException && error.name === "NotAllowedError"
+          ? "permission-needed"
+          : "error",
+    });
   }
   // labels are empty until permission: re-enumerate after a user gesture later.
 }

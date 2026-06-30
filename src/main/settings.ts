@@ -23,9 +23,9 @@ export class SettingsStore {
     return { ...this.settings };
   }
 
-  set(patch: Partial<Settings>): Settings {
+  async set(patch: Partial<Settings>): Promise<Settings> {
     this.settings = { ...this.settings, ...patch };
-    this.persist().catch(() => undefined);
+    await this.persist();
     return this.get();
   }
 

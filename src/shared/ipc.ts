@@ -17,6 +17,7 @@ export const IPC = {
   DEVICES_REFRESH: "devices:refresh",
 
   // Audio transport (mic output bus)
+  PLAY_BOTH: "audio:playBoth",
   MIC_PLAY: "mic:play",
   MIC_PAUSE: "mic:pause",
   MIC_RESUME: "mic:resume",
@@ -28,7 +29,9 @@ export const IPC = {
   // Audio transport (monitor / headphone bus)
   MONITOR_PLAY: "monitor:play",
   MONITOR_PAUSE: "monitor:pause",
+  MONITOR_RESUME: "monitor:resume",
   MONITOR_STOP: "monitor:stop",
+  MONITOR_SET_MUTE: "monitor:setMute",
   MONITOR_SET_VOLUME: "monitor:setVolume",
 
   // Hotkeys

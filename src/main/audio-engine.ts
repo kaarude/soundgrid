@@ -40,10 +40,15 @@ export class AudioEngine {
   private monitorPlaying: PlayingClip | null = null;
 
   private micMuted = false;
+  private monitorMuted = false;
   private micVolume = 0.9;
   private monitorVolume = 0.8;
 
   // ---- Mic bus ----
+  async playBoth(clip: SoundClip | undefined) {
+    await Promise.all([this.playToMic(clip), this.playToMonitor(clip)]);
+  }
+
   async playToMic(clip: SoundClip | undefined) {
     if (!clip) return;
     this.micPlaying.set(clip.id, {
@@ -99,8 +104,16 @@ export class AudioEngine {
     if (this.monitorPlaying) this.monitorPlaying.paused = true;
   }
 
+  resumeMonitor() {
+    if (this.monitorPlaying) this.monitorPlaying.paused = false;
+  }
+
   stopMonitor() {
     this.monitorPlaying = null;
+  }
+
+  setMonitorMute(muted: boolean) {
+    this.monitorMuted = muted;
   }
 
   setMonitorVolume(v: number) {
@@ -113,5 +126,9 @@ export class AudioEngine {
 
   getMonitorVolume() {
     return this.monitorVolume;
+  }
+
+  isMonitorMuted() {
+    return this.monitorMuted;
   }
 }

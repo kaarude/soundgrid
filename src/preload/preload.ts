@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "../shared/ipc.js";
-import { Settings, SoundClip } from "../shared/types.js";
+import { Settings, SoundClip, SoundClipPatch } from "../shared/types.js";
 
 // ---------------------------------------------------------------------------
 // Preload bridge
@@ -15,7 +15,7 @@ export interface SoundGridApi {
   getLibrary: () => Promise<SoundClip[]>;
   importFiles: (paths: string[]) => Promise<SoundClip[]>;
   removeClip: (id: string) => Promise<void>;
-  updateClip: (id: string, patch: Partial<SoundClip>) => Promise<void>;
+  updateClip: (id: string, patch: SoundClipPatch) => Promise<void>;
 
   // settings
   getSettings: () => Promise<Settings>;
@@ -23,9 +23,9 @@ export interface SoundGridApi {
 
   // devices (from renderer, since Electron main can't enumerate them)
   listDevices: () => Promise<unknown>;
-  pushDevices: (devices: unknown) => Promise<unknown>;
 
   // mic transport
+  playBoth: (clipId: string) => Promise<void>;
   micPlay: (clipId: string) => Promise<void>;
   micPause: () => Promise<void>;
   micResume: () => Promise<void>;
@@ -37,7 +37,9 @@ export interface SoundGridApi {
   // monitor transport
   monitorPlay: (clipId: string) => Promise<void>;
   monitorPause: () => Promise<void>;
+  monitorResume: () => Promise<void>;
   monitorStop: () => Promise<void>;
+  monitorSetMute: (muted: boolean) => Promise<void>;
   monitorSetVolume: (v: number) => Promise<void>;
 
   // hotkeys
@@ -53,7 +55,7 @@ contextBridge.exposeInMainWorld("soundgrid", {
   importFiles: (paths: string[]) =>
     ipcRenderer.invoke(IPC.LIBRARY_IMPORT, paths),
   removeClip: (id: string) => ipcRenderer.invoke(IPC.LIBRARY_REMOVE, id),
-  updateClip: (id: string, patch: Partial<SoundClip>) =>
+  updateClip: (id: string, patch: SoundClipPatch) =>
     ipcRenderer.invoke(IPC.LIBRARY_UPDATE_CLIP, id, patch),
 
   getSettings: () => ipcRenderer.invoke(IPC.SETTINGS_GET),
@@ -61,9 +63,8 @@ contextBridge.exposeInMainWorld("soundgrid", {
     ipcRenderer.invoke(IPC.SETTINGS_SET, patch),
 
   listDevices: () => ipcRenderer.invoke(IPC.DEVICES_LIST),
-  pushDevices: (devices: unknown) =>
-    ipcRenderer.invoke(IPC.DEVICES_REFRESH, devices),
 
+  playBoth: (clipId: string) => ipcRenderer.invoke(IPC.PLAY_BOTH, clipId),
   micPlay: (clipId: string) => ipcRenderer.invoke(IPC.MIC_PLAY, clipId),
   micPause: () => ipcRenderer.invoke(IPC.MIC_PAUSE),
   micResume: () => ipcRenderer.invoke(IPC.MIC_RESUME),
@@ -74,7 +75,10 @@ contextBridge.exposeInMainWorld("soundgrid", {
 
   monitorPlay: (clipId: string) => ipcRenderer.invoke(IPC.MONITOR_PLAY, clipId),
   monitorPause: () => ipcRenderer.invoke(IPC.MONITOR_PAUSE),
+  monitorResume: () => ipcRenderer.invoke(IPC.MONITOR_RESUME),
   monitorStop: () => ipcRenderer.invoke(IPC.MONITOR_STOP),
+  monitorSetMute: (muted: boolean) =>
+    ipcRenderer.invoke(IPC.MONITOR_SET_MUTE, muted),
   monitorSetVolume: (v: number) =>
     ipcRenderer.invoke(IPC.MONITOR_SET_VOLUME, v),
 

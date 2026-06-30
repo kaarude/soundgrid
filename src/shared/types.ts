@@ -13,6 +13,10 @@ export interface SoundClip {
   broadcast: boolean; // sent to mic output when true; monitor-only when false
 }
 
+export type SoundClipPatch = Partial<
+  Pick<SoundClip, "name" | "category" | "hotkey" | "volume" | "loop" | "broadcast">
+>;
+
 export interface AudioDevices {
   micOutputs: AudioDevice[]; // virtual cables + playback devices we can route "mic" audio to
   monitors: AudioDevice[]; // real playback devices (headphones, speakers)
