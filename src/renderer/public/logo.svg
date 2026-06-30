@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+  <!-- SoundGrid brand mark: a 2×2 cue rack with one live firing tile. -->
+
+  <!-- Inactive cue tiles -->
+  <rect x="3" y="3" width="20" height="20" rx="4" fill="#e6edf3" />
+  <rect x="25" y="3" width="20" height="20" rx="4" fill="#e6edf3" />
+  <rect x="25" y="25" width="20" height="20" rx="4" fill="#e6edf3" />
+
+  <!-- Active firing tile: the monitor/brand voice -->
+  <rect x="3" y="25" width="20" height="20" rx="4" fill="#4fd1c5" />
+
+  <!-- Tiny broadcast/mic indicator on the live tile -->
+  <circle cx="19" cy="28" r="2.5" fill="#6a45e6" />
+</svg>
