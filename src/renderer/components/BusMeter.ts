@@ -53,7 +53,8 @@ export function BusMeter(cfg: BusConfig): HTMLElement {
 
   const readout = document.createElement("div");
   readout.className = "bus-readout";
-  readout.textContent = "−∞";
+  readout.textContent = "0%";
+  readout.setAttribute("aria-label", `${cfg.label} volume`);
 
   const nowPlaying = document.createElement("div");
   nowPlaying.className = "bus-now";
@@ -97,6 +98,7 @@ export function BusMeter(cfg: BusConfig): HTMLElement {
   let level = 0; // 0..1
   let target = 0;
   let raf = 0;
+  let lastTargetAt = 0;
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const playing = (): NowPlaying | null =>
@@ -105,26 +107,32 @@ export function BusMeter(cfg: BusConfig): HTMLElement {
     cfg.bus === "mic" ? store.state.micMuted : store.state.monitorMuted;
 
   function tick() {
+    const now = performance.now();
     const np = playing();
     if (np && !np.paused && !muted()) {
-      // simulated program level: random walk near the bus volume
-      const base =
-        cfg.bus === "mic" ? store.state.micVolume : store.state.monitorVolume;
-      target = Math.min(1, Math.max(0.05, base * (0.55 + Math.random() * 0.5)));
+      if (now - lastTargetAt > 120 + Math.random() * 60) {
+        const base =
+          cfg.bus === "mic" ? store.state.micVolume : store.state.monitorVolume;
+        target = Math.min(
+          1,
+          Math.max(0.04, base * (0.45 + Math.random() * 0.45)),
+        );
+        lastTargetAt = now;
+      }
     } else {
       target = 0;
     }
     if (reduce.matches) {
       level = target;
     } else {
-      level += (target - level) * 0.18;
+      const smoothing = target > level ? 0.34 : 0.08;
+      level += (target - level) * smoothing;
+      if (target === 0 && level < 0.001) level = 0;
     }
     const pct = Math.round(level * 100);
     fill.style.height = `${pct}%`;
     peak.style.bottom = `${Math.min(100, pct + 3)}%`;
     meter.setAttribute("aria-valuenow", String(pct));
-    readout.textContent =
-      level <= 0.001 ? "−∞" : `${(20 * Math.log10(level)).toFixed(1)} dB`;
     raf = requestAnimationFrame(tick);
   }
   raf = requestAnimationFrame(tick);
@@ -163,10 +171,12 @@ export function syncBusMeter(bus: Bus): void {
     ".bus-vol input",
   ) as HTMLInputElement | null;
   const volVal = el.querySelector<HTMLElement>(".bus-vol-val");
+  const readout = el.querySelector<HTMLElement>(".bus-readout");
   if (volInput) {
     const v = Math.round(vol * 100);
     if (Number(volInput.value) !== v) volInput.value = String(v);
     if (volVal) volVal.textContent = `${v}%`;
+    if (readout) readout.textContent = `${v}%`;
   }
 }
 
@@ -195,9 +205,11 @@ async function resumeBus(bus: Bus): Promise<void> {
       store.update({ micPlaying: { ...np, paused: false } });
     }
   } else {
-    // monitor has no separate resume in the bridge; replay the current clip
     const np = store.state.monitorPlaying;
-    if (np) await window.soundgrid.monitorPlay(np.clipId);
+    if (np && np.paused) {
+      await window.soundgrid.monitorResume();
+      store.update({ monitorPlaying: { ...np, paused: false } });
+    }
   }
 }
 
@@ -232,7 +244,7 @@ async function toggleMute(bus: Bus): Promise<void> {
     store.update({ micMuted: next });
   } else {
     const next = !store.state.monitorMuted;
-    // monitor mute: set volume to 0/restore is the bridge-less approximation
+    await window.soundgrid.monitorSetMute(next);
     store.update({ monitorMuted: next });
   }
 }

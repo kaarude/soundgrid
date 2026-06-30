@@ -2,5 +2,5 @@
   "files": ["src/renderer/index.html"],
   "insertBefore": "</body>",
   "commentSyntax": "html",
-  "cspChecked": false
+  "cspChecked": true
 }

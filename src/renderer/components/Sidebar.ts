@@ -1,4 +1,5 @@
 import { icon } from "./icons";
+import { importAudioFiles } from "./library-actions";
 import { store } from "./store";
 
 // Collapsible cue rail: one sidebar that widens from icon-only to icon + label.
@@ -48,7 +49,7 @@ export function Sidebar(): HTMLElement {
   importLabel.className = "import-label";
   importLabel.textContent = "Import audio";
   importBtn.append(importLabel);
-  importBtn.addEventListener("click", importAudio);
+  importBtn.addEventListener("click", () => void importAudioFiles());
 
   el.append(toggle, searchWrap, cats, importBtn);
   return el;
@@ -84,11 +85,6 @@ export function syncSidebar(): void {
   if (search && search.value.toLowerCase() !== store.state.filter) {
     search.value = store.state.filter;
   }
-}
-
-async function importAudio(): Promise<void> {
-  const files = await window.soundgrid.pickAudioFiles();
-  if (files.length) await window.soundgrid.importFiles(files);
 }
 
 function categoryIcon(category: string): SVGElement {

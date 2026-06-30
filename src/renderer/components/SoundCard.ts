@@ -1,16 +1,27 @@
-import { SoundClip } from "../../shared/types";
+import { SoundClip, SoundClipPatch } from "../../shared/types";
 import { icon } from "./icons";
 import { store } from "./store";
 
-// A single clip card — the firing surface. Two foot actions express the
-// two-bus model per clip: Mic (broadcast) and Preview (monitor-only).
+// A single clip card — the firing surface. The main play action hits both
+// buses; the Mic and Preview buttons remain route-specific controls.
 // Hover lights the hairline border Signal Violet (The Flat-At-Rest Rule).
 
 export function SoundCard(clip: SoundClip): HTMLElement {
   const card = document.createElement("article");
   card.className = "card";
   card.tabIndex = 0;
-  card.setAttribute("aria-label", `${clip.name} — ${clip.category}`);
+  card.setAttribute(
+    "aria-label",
+    `${clip.name} — ${clip.category}. Fire to mic and monitor`,
+  );
+  card.title = "Fire to mic and monitor";
+  card.addEventListener("click", () => fireBoth(clip, card));
+  card.addEventListener("keydown", (event) => {
+    if (event.target !== card) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    void fireBoth(clip, card);
+  });
 
   const top = document.createElement("div");
   top.className = "card-top";
@@ -21,6 +32,20 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   cat.className = "card-cat";
   cat.textContent = clip.category;
   top.append(name, cat);
+
+  const metadata = document.createElement("div");
+  metadata.className = "card-meta";
+  const both = document.createElement("span");
+  both.className = "route-badge";
+  both.textContent = "Card: both";
+  metadata.append(both);
+  if (clip.hotkey) {
+    const hotkey = document.createElement("kbd");
+    hotkey.className = "hotkey-badge";
+    hotkey.textContent = formatHotkey(clip.hotkey);
+    hotkey.title = `Global hotkey: ${clip.hotkey}`;
+    metadata.append(hotkey);
+  }
 
   const actions = document.createElement("div");
   actions.className = "card-actions";
@@ -33,11 +58,12 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   const micLabel = document.createElement("span");
   micLabel.textContent = "Mic";
   micBtn.append(micLabel);
-  micBtn.addEventListener("click", () => {
+  micBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
     micBtn.classList.remove("is-firing");
     void micBtn.offsetWidth; // restart the animation
     micBtn.classList.add("is-firing");
-    fireMic(clip);
+    void fireMic(clip);
   });
 
   const prevBtn = document.createElement("button");
@@ -48,21 +74,225 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   const prevLabel = document.createElement("span");
   prevLabel.textContent = "Preview";
   prevBtn.append(prevLabel);
-  prevBtn.addEventListener("click", () => firePreview(clip));
-
-  const delBtn = document.createElement("button");
-  delBtn.type = "button";
-  delBtn.className = "card-btn card-btn--del";
-  delBtn.title = "Remove";
-  delBtn.setAttribute("aria-label", `Remove ${clip.name}`);
-  delBtn.append(icon.trash());
-  delBtn.addEventListener("click", async () => {
-    await window.soundgrid.removeClip(clip.id);
+  prevBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void firePreview(clip);
   });
 
-  actions.append(micBtn, prevBtn, delBtn);
-  card.append(top, actions);
+  const menuBtn = document.createElement("button");
+  menuBtn.type = "button";
+  menuBtn.className = "card-menu";
+  menuBtn.title = "Clip settings";
+  menuBtn.setAttribute("aria-haspopup", "menu");
+  menuBtn.setAttribute("aria-expanded", "false");
+  menuBtn.setAttribute("aria-label", `Settings for ${clip.name}`);
+  menuBtn.append(icon.more());
+  menuBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const wasOpen = card.classList.contains("is-menu-open");
+    closeOtherMenus(card);
+    card.classList.toggle("is-menu-open", !wasOpen);
+    menuBtn.setAttribute("aria-expanded", String(!wasOpen));
+    if (!wasOpen) {
+      const menu = card.querySelector<HTMLElement>(".clip-menu");
+      menu?.classList.remove("is-positioned");
+      requestAnimationFrame(() => {
+        if (!card.classList.contains("is-menu-open")) return;
+        positionMenu(card, menuBtn);
+        menu?.classList.add("is-positioned");
+      });
+    }
+  });
+
+  actions.append(micBtn, prevBtn);
+  card.append(top, metadata, actions, menuBtn, ClipSettingsMenu(clip, card));
   return card;
+}
+
+function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
+  const form = document.createElement("form");
+  form.className = "clip-menu";
+  form.addEventListener("click", (event) => event.stopPropagation());
+
+  const name = textField("Name", clip.name);
+  const category = textField("Category", clip.category);
+  const hotkey = textField("Hotkey", clip.hotkey ?? "");
+  hotkey.input.placeholder = "Click, then press keys";
+  hotkey.input.readOnly = true;
+  hotkey.input.addEventListener("keydown", (event) => {
+    event.preventDefault();
+    hotkey.input.value = normalizeHotkeyEvent(event);
+  });
+
+  const volume = document.createElement("label");
+  volume.className = "clip-field clip-field--volume";
+  const volumeHead = document.createElement("span");
+  volumeHead.className = "clip-volume-head";
+  const volumeLabel = document.createElement("span");
+  volumeLabel.textContent = "Volume";
+  const volumeValue = document.createElement("span");
+  volumeValue.className = "clip-volume-value";
+  volumeValue.textContent = `${Math.round(clip.volume * 100)}%`;
+  volumeHead.append(volumeLabel, volumeValue);
+  const volumeTrack = document.createElement("span");
+  volumeTrack.className = "clip-volume";
+  const volumeInput = document.createElement("input");
+  volumeInput.type = "range";
+  volumeInput.min = "0";
+  volumeInput.max = "100";
+  volumeInput.value = String(Math.round(clip.volume * 100));
+  updateVolumeControl(volumeInput, volumeValue);
+  volumeInput.addEventListener("input", () => {
+    updateVolumeControl(volumeInput, volumeValue);
+  });
+  volumeTrack.append(volumeInput);
+  volume.append(volumeHead, volumeTrack);
+
+  const loop = document.createElement("label");
+  loop.className = "clip-check";
+  const loopInput = document.createElement("input");
+  loopInput.type = "checkbox";
+  loopInput.checked = clip.loop;
+  const loopBox = document.createElement("span");
+  loopBox.className = "clip-check-box";
+  const loopText = document.createElement("span");
+  loopText.textContent = "Loop";
+  loop.append(loopInput, loopBox, loopText);
+
+  const error = document.createElement("div");
+  error.className = "clip-menu-error";
+
+  const footer = document.createElement("div");
+  footer.className = "clip-menu-actions";
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "clip-menu-remove";
+  remove.append(icon.trash(), document.createTextNode("Remove"));
+  remove.addEventListener("click", async () => {
+    await window.soundgrid.removeClip(clip.id);
+    store.update({
+      clips: store.state.clips.filter((item) => item.id !== clip.id),
+    });
+  });
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.className = "clip-menu-save";
+  save.textContent = "Save";
+  footer.append(remove, save);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const normalizedHotkey = normalizeAccelerator(hotkey.input.value);
+    const conflict = findHotkeyConflict(clip.id, normalizedHotkey);
+    if (conflict) {
+      error.textContent = `Hotkey already used by ${conflict}.`;
+      return;
+    }
+
+    const patch: SoundClipPatch = {
+      name: name.input.value.trim() || clip.name,
+      category: category.input.value.trim() || "Uncategorized",
+      hotkey: normalizedHotkey || undefined,
+      volume: Number(volumeInput.value) / 100,
+      loop: loopInput.checked,
+    };
+    await window.soundgrid.updateClip(clip.id, patch);
+    store.update({
+      clips: store.state.clips.map((item) =>
+        item.id === clip.id ? { ...item, ...patch } : item,
+      ),
+    });
+    closeMenu(card);
+  });
+
+  form.append(
+    name.label,
+    category.label,
+    hotkey.label,
+    volume,
+    loop,
+    error,
+    footer,
+  );
+  return form;
+}
+
+function textField(labelText: string, value: string) {
+  const label = document.createElement("label");
+  label.className = "clip-field";
+  const span = document.createElement("span");
+  span.textContent = labelText;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = value;
+  label.append(span, input);
+  return { label, input };
+}
+
+function closeOtherMenus(card: HTMLElement) {
+  for (const open of document.querySelectorAll<HTMLElement>(
+    ".card.is-menu-open",
+  )) {
+    if (open !== card) closeMenu(open);
+  }
+}
+
+function closeMenu(card: HTMLElement) {
+  card.classList.remove("is-menu-open");
+  const menu = card.querySelector<HTMLElement>(".clip-menu");
+  const trigger = card.querySelector<HTMLButtonElement>(".card-menu");
+  menu?.classList.remove("is-positioned");
+  trigger?.setAttribute("aria-expanded", "false");
+}
+
+function positionMenu(card: HTMLElement, anchor: HTMLElement) {
+  const menu = card.querySelector<HTMLElement>(".clip-menu");
+  if (!menu) return;
+
+  const gap = 8;
+  const margin = 12;
+  const rect = anchor.getBoundingClientRect();
+  const width = Math.min(268, window.innerWidth - margin * 2);
+  menu.style.width = `${width}px`;
+  menu.style.maxHeight = `${Math.max(180, window.innerHeight - margin * 2)}px`;
+
+  const menuHeight = menu.offsetHeight;
+  const fitsRight = rect.right + gap + width <= window.innerWidth - margin;
+  const preferredLeft = fitsRight ? rect.right + gap : rect.left - width - gap;
+  const left = Math.max(
+    margin,
+    Math.min(window.innerWidth - width - margin, preferredLeft),
+  );
+  const top = Math.max(
+    margin,
+    Math.min(window.innerHeight - menuHeight - margin, rect.top - 4),
+  );
+
+  menu.dataset.placement = fitsRight ? "right" : "left";
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function updateVolumeControl(
+  input: HTMLInputElement,
+  value: HTMLElement,
+): void {
+  const pct = Number(input.value);
+  value.textContent = `${pct}%`;
+  input.style.setProperty("--clip-volume-pct", `${pct}%`);
+}
+
+async function fireBoth(clip: SoundClip, source?: HTMLElement): Promise<void> {
+  if (source?.classList.contains("is-menu-open")) return;
+  source?.classList.remove("is-firing");
+  if (source) void source.offsetWidth;
+  source?.classList.add("is-firing");
+  await window.soundgrid.playBoth(clip.id);
+  store.update({
+    micPlaying: { clipId: clip.id, name: clip.name, paused: false },
+    monitorPlaying: { clipId: clip.id, name: clip.name, paused: false },
+    micMuted: false,
+  });
 }
 
 async function fireMic(clip: SoundClip): Promise<void> {
@@ -79,3 +309,105 @@ async function firePreview(clip: SoundClip): Promise<void> {
     monitorPlaying: { clipId: clip.id, name: clip.name, paused: false },
   });
 }
+
+function normalizeHotkeyEvent(event: KeyboardEvent): string {
+  if (event.key === "Escape" || event.key === "Backspace") return "";
+  const parts: string[] = [];
+  if (event.ctrlKey || event.metaKey) parts.push("CommandOrControl");
+  if (event.altKey) parts.push("Alt");
+  if (event.shiftKey) parts.push("Shift");
+
+  const key = normalizeKey(event.key);
+  if (key && !["CommandOrControl", "Alt", "Shift"].includes(key)) {
+    parts.push(key);
+  }
+  return [...new Set(parts)].join("+");
+}
+
+function normalizeAccelerator(value: string): string {
+  return value
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      if (/^(ctrl|control|cmd|command|meta)$/i.test(part)) {
+        return "CommandOrControl";
+      }
+      if (/^option$/i.test(part)) return "Alt";
+      if (/^esc$/i.test(part)) return "Escape";
+      if (part.length === 1) return part.toUpperCase();
+      return part[0].toUpperCase() + part.slice(1);
+    })
+    .join("+");
+}
+
+function formatHotkey(value: string): string {
+  return value
+    .replace(
+      "CommandOrControl",
+      navigator.platform.includes("Mac") ? "Cmd" : "Ctrl",
+    )
+    .replaceAll("+", " + ");
+}
+
+function normalizeKey(key: string): string {
+  if (/^[a-z0-9]$/i.test(key)) return key.toUpperCase();
+  if (key === " ") return "Space";
+  const aliases: Record<string, string> = {
+    ArrowUp: "Up",
+    ArrowDown: "Down",
+    ArrowLeft: "Left",
+    ArrowRight: "Right",
+    Control: "CommandOrControl",
+    Meta: "CommandOrControl",
+    Alt: "Alt",
+    Shift: "Shift",
+    Escape: "Escape",
+  };
+  return aliases[key] ?? key;
+}
+
+function findHotkeyConflict(clipId: string, hotkey: string): string | null {
+  if (!hotkey) return null;
+  const normalized = hotkey.toLowerCase();
+  if (store.state.settings.stopAllHotkey?.toLowerCase() === normalized) {
+    return "Stop all";
+  }
+  if (store.state.settings.micMuteHotkey?.toLowerCase() === normalized) {
+    return "Mic mute";
+  }
+  const duplicate = store.state.clips.find(
+    (clip) => clip.id !== clipId && clip.hotkey?.toLowerCase() === normalized,
+  );
+  return duplicate?.name ?? null;
+}
+
+document.addEventListener("click", () => {
+  for (const open of document.querySelectorAll<HTMLElement>(
+    ".card.is-menu-open",
+  )) {
+    closeMenu(open);
+  }
+});
+
+window.addEventListener("resize", () => {
+  for (const open of document.querySelectorAll<HTMLElement>(
+    ".card.is-menu-open",
+  )) {
+    const anchor = open.querySelector<HTMLElement>(".card-menu");
+    if (anchor) positionMenu(open, anchor);
+  }
+});
+
+document.addEventListener(
+  "scroll",
+  () => {
+    for (const open of document.querySelectorAll<HTMLElement>(
+      ".card.is-menu-open",
+    )) {
+      const anchor = open.querySelector<HTMLElement>(".card-menu");
+      if (anchor) positionMenu(open, anchor);
+    }
+  },
+  { capture: true, passive: true },
+);

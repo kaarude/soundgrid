@@ -6,11 +6,12 @@ import {
   Tray,
   nativeImage,
   dialog,
+  shell,
 } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { IPC } from "../shared/ipc.js";
-import { DEFAULT_SETTINGS, Settings, SoundClip } from "../shared/types.js";
+import { Settings, SoundClip, SoundClipPatch } from "../shared/types.js";
 import { LibraryStore } from "./library.js";
 import { SettingsStore } from "./settings.js";
 import { AudioEngine } from "./audio-engine.js";
@@ -43,6 +44,7 @@ class SoundGrid {
     await this.settings.init(path.join(userDataDir, "settings.json"));
 
     this.registerIpc();
+    this.registerPersistedHotkeys();
     this.createWindow();
     this.createTray();
 
@@ -75,6 +77,16 @@ class SoundGrid {
     } else {
       this.win.loadFile(path.join(__dirname, "../renderer/index.html"));
     }
+
+    this.win.webContents.setWindowOpenHandler(({ url }) => {
+      if (isSafeExternalUrl(url)) void shell.openExternal(url);
+      return { action: "deny" };
+    });
+
+    this.win.webContents.on("will-navigate", (event, url) => {
+      const current = this.win?.webContents.getURL();
+      if (current && url !== current) event.preventDefault();
+    });
 
     this.win.on("close", (e) => {
       const s = this.settings.get();
@@ -123,21 +135,28 @@ class SoundGrid {
     );
     ipcMain.handle(
       IPC.LIBRARY_UPDATE_CLIP,
-      (_e, id: string, patch: Partial<SoundClip>) =>
-        this.library.updateClip(id, patch),
+      async (_e, id: string, patch: SoundClipPatch) => {
+        await this.library.updateClip(id, patch);
+        this.registerPersistedHotkeys();
+      },
     );
 
     // ---- Settings ----
     ipcMain.handle(IPC.SETTINGS_GET, () => this.settings.get());
-    ipcMain.handle(IPC.SETTINGS_SET, (_e, patch: Partial<Settings>) =>
-      this.settings.set(patch),
-    );
+    ipcMain.handle(IPC.SETTINGS_SET, async (_e, patch: Partial<Settings>) => {
+      const next = await this.settings.set(patch);
+      this.registerPersistedHotkeys();
+      return next;
+    });
 
     // ---- Devices ----
     ipcMain.handle(IPC.DEVICES_LIST, () => this.devices.list());
     ipcMain.handle(IPC.DEVICES_REFRESH, () => this.devices.list());
 
     // ---- Mic transport ----
+    ipcMain.handle(IPC.PLAY_BOTH, (_e, clipId: string) =>
+      this.audio.playBoth(this.library.byId(clipId)),
+    );
     ipcMain.handle(IPC.MIC_PLAY, (_e, clipId: string) =>
       this.audio.playToMic(this.library.byId(clipId)),
     );
@@ -157,7 +176,11 @@ class SoundGrid {
       this.audio.playToMonitor(this.library.byId(clipId)),
     );
     ipcMain.handle(IPC.MONITOR_PAUSE, () => this.audio.pauseMonitor());
+    ipcMain.handle(IPC.MONITOR_RESUME, () => this.audio.resumeMonitor());
     ipcMain.handle(IPC.MONITOR_STOP, () => this.audio.stopMonitor());
+    ipcMain.handle(IPC.MONITOR_SET_MUTE, (_e, muted: boolean) =>
+      this.audio.setMonitorMute(muted),
+    );
     ipcMain.handle(IPC.MONITOR_SET_VOLUME, (_e, vol: number) =>
       this.audio.setMonitorVolume(vol),
     );
@@ -169,7 +192,7 @@ class SoundGrid {
         this.hotkeys.registerAll(bindings, (id) => {
           if (id === "__stop_all__") return this.audio.stopAll();
           if (id === "__mic_mute__") return this.audio.toggleMicMute();
-          return this.audio.playToMic(this.library.byId(id));
+          return this.audio.playBoth(this.library.byId(id));
         }),
     );
     ipcMain.handle(IPC.HOTKEYS_UNREGISTER, () => this.hotkeys.unregisterAll());
@@ -200,9 +223,50 @@ class SoundGrid {
       return result.filePaths;
     });
   }
+
+  private registerPersistedHotkeys() {
+    const settings = this.settings.get();
+    const bindings = [
+      settings.stopAllHotkey
+        ? { id: "__stop_all__", keys: settings.stopAllHotkey }
+        : null,
+      settings.micMuteHotkey
+        ? { id: "__mic_mute__", keys: settings.micMuteHotkey }
+        : null,
+      ...this.library
+        .getClips()
+        .filter((clip) => clip.hotkey)
+        .map((clip) => ({ id: clip.id, keys: clip.hotkey as string })),
+    ].filter((binding): binding is { id: string; keys: string } =>
+      Boolean(binding),
+    );
+
+    const seen = new Set<string>();
+    const unique = bindings.filter((binding) => {
+      const key = binding.keys.trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    this.hotkeys.registerAll(unique, (id) => {
+      if (id === "__stop_all__") return this.audio.stopAll();
+      if (id === "__mic_mute__") return this.audio.toggleMicMute();
+      return this.audio.playBoth(this.library.byId(id));
+    });
+  }
 }
 
 new SoundGrid().start().catch((err) => {
   console.error("SoundGrid failed to start:", err);
   app.quit();
 });
+
+function isSafeExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}

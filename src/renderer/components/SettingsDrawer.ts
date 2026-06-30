@@ -15,11 +15,18 @@ export function SettingsDrawer(): HTMLElement {
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "true");
   panel.setAttribute("aria-label", "Settings");
+  panel.tabIndex = -1;
 
   const head = document.createElement("div");
   head.className = "drawer-head";
   const title = document.createElement("h2");
   title.textContent = "Settings";
+  const headActions = document.createElement("div");
+  headActions.className = "drawer-head-actions";
+  const saveStatus = document.createElement("span");
+  saveStatus.className = "drawer-save-status";
+  saveStatus.setAttribute("role", "status");
+  saveStatus.setAttribute("aria-live", "polite");
   const close = document.createElement("button");
   close.type = "button";
   close.className = "icon-btn";
@@ -27,17 +34,80 @@ export function SettingsDrawer(): HTMLElement {
   close.setAttribute("aria-label", "Close settings");
   close.append(icon.close());
   close.addEventListener("click", () => store.update({ settingsOpen: false }));
-  head.append(title, close);
+  headActions.append(saveStatus, close);
+  head.append(title, headActions);
 
   const body = document.createElement("div");
   body.className = "drawer-body";
 
-  const routing = document.createElement("section");
-  routing.className = "drawer-group";
-  routing.innerHTML = `<h3>Routing</h3>`;
+  panel.append(head, body);
+  el.append(panel);
+
+  el.addEventListener("click", (e) => {
+    if (e.target === el) store.update({ settingsOpen: false });
+  });
+  el.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      store.update({ settingsOpen: false });
+      return;
+    }
+    if (event.key === "Tab") trapFocus(panel, event);
+  });
+  return el;
+}
+
+let settingsWasOpen = false;
+let settingsTrigger: HTMLElement | null = null;
+
+export function syncSettingsDrawer(): void {
+  const overlay = document.querySelector<HTMLElement>(".drawer-overlay");
+  if (!overlay) return;
+  const opening = store.state.settingsOpen && !settingsWasOpen;
+  const closing = !store.state.settingsOpen && settingsWasOpen;
+  if (opening) {
+    const active = document.activeElement as HTMLElement | null;
+    settingsTrigger =
+      active && active !== document.body
+        ? active
+        : document.querySelector<HTMLElement>('[aria-label="Open settings"]');
+  }
+  overlay.hidden = !store.state.settingsOpen;
+  if (!overlay.hidden) {
+    renderSettingsBody();
+    if (opening) {
+      document.body.classList.add("has-modal-open");
+      requestAnimationFrame(() =>
+        overlay.querySelector<HTMLElement>(".drawer")?.focus(),
+      );
+    }
+  }
+  if (closing) {
+    document.body.classList.remove("has-modal-open");
+    settingsTrigger?.focus();
+    settingsTrigger = null;
+  }
+  settingsWasOpen = store.state.settingsOpen;
+}
+
+// ---- field builders ----
+function renderSettingsBody(): void {
+  const body = document.querySelector<HTMLElement>(".drawer-body");
+  if (!body) return;
+
+  const signature = JSON.stringify({
+    settings: store.state.settings,
+    devices: store.state.devices,
+    devicesStatus: store.state.devicesStatus,
+  });
+  if (body.dataset.signature === signature) return;
+  body.dataset.signature = signature;
+
   const s = store.state.settings;
   const d = store.state.devices;
 
+  const routing = group("Routing");
+  routing.append(deviceSummary());
   routing.append(
     deviceField(
       "Mic output device",
@@ -62,10 +132,13 @@ export function SettingsDrawer(): HTMLElement {
     ),
   );
 
-  const behavior = document.createElement("section");
-  behavior.className = "drawer-group";
-  behavior.innerHTML = `<h3>Behavior</h3>`;
+  const behavior = group("Behavior");
+  const listeningMode = document.createElement("p");
+  listeningMode.className = "group-note";
+  listeningMode.textContent =
+    "Choose one local listening mode. Mic-only turns headset-only off automatically.";
   behavior.append(
+    listeningMode,
     toggleField("Passthrough real mic", "passthrough", s.passthrough),
     toggleField(
       "Headset-only mode",
@@ -87,9 +160,7 @@ export function SettingsDrawer(): HTMLElement {
     ),
   );
 
-  const system = document.createElement("section");
-  system.className = "drawer-group";
-  system.innerHTML = `<h3>System</h3>`;
+  const system = group("System");
   system.append(
     toggleField("Run on startup", "runOnStartup", s.runOnStartup),
     toggleField("Minimize to tray", "minimizeToTray", s.minimizeToTray),
@@ -97,23 +168,18 @@ export function SettingsDrawer(): HTMLElement {
     selectField("Theme", "theme", ["dark", "light", "system"], s.theme),
   );
 
-  body.append(routing, behavior, system);
-  panel.append(head, body);
-  el.append(panel);
-
-  el.addEventListener("click", (e) => {
-    if (e.target === el) store.update({ settingsOpen: false });
-  });
-  return el;
+  body.replaceChildren(routing, behavior, system);
 }
 
-export function syncSettingsDrawer(): void {
-  const overlay = document.querySelector<HTMLElement>(".drawer-overlay");
-  if (!overlay) return;
-  overlay.hidden = !store.state.settingsOpen;
+function group(title: string): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "drawer-group";
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+  section.append(heading);
+  return section;
 }
 
-// ---- field builders ----
 function deviceField(
   label: string,
   key: keyof Settings,
@@ -127,6 +193,8 @@ function deviceField(
   lab.className = "field-label";
   lab.textContent = label;
   const select = document.createElement("select");
+  select.id = `setting-${String(key)}`;
+  lab.htmlFor = select.id;
   select.dataset.setting = String(key);
   const ph = document.createElement("option");
   ph.value = "";
@@ -142,9 +210,21 @@ function deviceField(
   select.addEventListener("change", () =>
     persistSetting(key, select.value || null),
   );
+  const selectedExists =
+    !selected || devices.some((device) => device.id === selected);
+  const valid = Boolean(selected && selectedExists);
+  field.classList.toggle("is-valid", valid);
+  field.classList.toggle("is-error", Boolean(selected && !selectedExists));
   const hint = document.createElement("p");
   hint.className = "field-hint";
-  hint.textContent = help;
+  hint.textContent =
+    selected && !selectedExists
+      ? "The saved device is unavailable. Reconnect it or choose another device."
+      : devices.length === 0
+        ? "No devices are available. Check system audio permissions, then reconnect or refresh your device."
+        : valid
+          ? `Connected. ${help}`
+          : `Select a device. ${help}`;
   field.append(lab, select, hint);
   return field;
 }
@@ -166,6 +246,7 @@ function toggleField(
   toggle.className = "switch" + (value ? " is-on" : "");
   toggle.setAttribute("role", "switch");
   toggle.setAttribute("aria-checked", String(value));
+  toggle.setAttribute("aria-label", label);
   toggle.dataset.setting = String(key);
   const knob = document.createElement("span");
   knob.className = "switch-knob";
@@ -173,7 +254,13 @@ function toggleField(
   toggle.addEventListener("click", () => {
     const next = toggle.classList.toggle("is-on");
     toggle.setAttribute("aria-checked", String(next));
-    persistSetting(key, next);
+    if (next && key === "micOnly") {
+      void persistSettings({ micOnly: true, headsetOnly: false });
+    } else if (next && key === "headsetOnly") {
+      void persistSettings({ headsetOnly: true, micOnly: false });
+    } else {
+      void persistSetting(key, next);
+    }
   });
   labelEl.append(text, toggle);
   field.append(labelEl);
@@ -198,6 +285,8 @@ function selectField(
   lab.className = "field-label";
   lab.textContent = label;
   const select = document.createElement("select");
+  select.id = `setting-${String(key)}`;
+  lab.htmlFor = select.id;
   select.dataset.setting = String(key);
   for (const opt of options) {
     const o = document.createElement("option");
@@ -215,8 +304,73 @@ async function persistSetting(
   key: keyof Settings,
   value: unknown,
 ): Promise<void> {
-  const next = await window.soundgrid.setSettings({
-    [key]: value,
-  } as Partial<Settings>);
-  store.update({ settings: next });
+  await persistSettings({ [key]: value } as Partial<Settings>);
+}
+
+async function persistSettings(patch: Partial<Settings>): Promise<void> {
+  setSaveStatus("saving", "Saving…");
+  try {
+    const next = await window.soundgrid.setSettings(patch);
+    store.update({ settings: next });
+    setSaveStatus("saved", "Saved");
+  } catch {
+    setSaveStatus("error", "Could not save. Try again.");
+  }
+}
+
+function deviceSummary(): HTMLElement {
+  const summary = document.createElement("div");
+  const { settings, devices, devicesStatus } = store.state;
+  const routeIsAvailable = (selected: string | null, list: AudioDevice[]) =>
+    Boolean(selected && list.some((device) => device.id === selected));
+  const routingComplete =
+    routeIsAvailable(settings.micOutputDeviceId, devices.micOutputs) &&
+    routeIsAvailable(settings.monitorDeviceId, devices.monitors) &&
+    (!settings.passthrough ||
+      routeIsAvailable(settings.realMicDeviceId, devices.realMics));
+  const visualStatus =
+    devicesStatus === "ready" && !routingComplete ? "error" : devicesStatus;
+  summary.className = `routing-status routing-status--${visualStatus}`;
+  const copy: Record<typeof store.state.devicesStatus, string> = {
+    loading: "Checking audio devices…",
+    ready: "Audio devices detected. Confirm both routes before broadcasting.",
+    "permission-needed":
+      "Audio permission is required to identify devices. Check system permissions, then reopen Settings.",
+    error:
+      "Audio devices could not be read. Check your system audio service and reopen Settings.",
+  };
+  summary.textContent =
+    devicesStatus === "ready" && !routingComplete
+      ? "Routing is incomplete. Select an available mic output and monitor before broadcasting."
+      : copy[devicesStatus];
+  summary.setAttribute("role", visualStatus === "error" ? "alert" : "status");
+  return summary;
+}
+
+function setSaveStatus(
+  state: "saving" | "saved" | "error",
+  text: string,
+): void {
+  const status = document.querySelector<HTMLElement>(".drawer-save-status");
+  if (!status) return;
+  status.dataset.state = state;
+  status.textContent = text;
+}
+
+function trapFocus(panel: HTMLElement, event: KeyboardEvent): void {
+  const focusable = [
+    ...panel.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ];
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
