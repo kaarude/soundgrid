@@ -12,9 +12,10 @@
       { "target": "nsis", "arch": ["x64"] },
       { "target": "portable", "arch": ["x64"] }
     ],
-    "artifactName": "SoundGrid-${version}-${arch}.${ext}"
+    "artifactName": "SoundGrid-Portable-${version}-${arch}.${ext}"
   },
   "nsis": {
+    "artifactName": "SoundGrid-Setup-${version}-${arch}.${ext}",
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,

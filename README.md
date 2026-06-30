@@ -114,7 +114,9 @@ Useful scripts:
 | `npm run dev`      | Vite + Electron, hot-reloading renderer        |
 | `npm run build`    | Build renderer + main into `dist/`             |
 | `npm run pack`     | Build + unpacked app (sanity check)            |
-| `npm run dist`     | Build + Windows NSIS installer + portable exe  |
+| `npm run dist`     | Build + Windows installer and portable exe     |
+| `npm run dist:installer` | Build only `SoundGrid-Setup-*.exe`       |
+| `npm run dist:portable` | Build only the no-install portable exe     |
 | `npm run dist:mac` | Build + macOS package (dev-only; no mic inject)|
 | `npm run check`    | Type-check main + renderer                      |
 | `npm run format`   | Prettier write across the repo                 |
@@ -128,8 +130,10 @@ npm install
 npm run dist     # produces NSIS installer + portable exe in release/
 ```
 
-For cross-platform builds from any OS via GitHub Actions, see
-`.github/workflows/release.yml` (planned).
+The GitHub Actions release workflow also builds the installer on a clean
+Windows machine. Run **Build Windows installer** from the repository's Actions
+tab to get a downloadable artifact, or push a tag such as `v0.1.0` to attach
+the `.exe` directly to a GitHub Release.
 
 > macOS note: macOS has no API to inject audio into a real mic, so on Mac the
 > mic bus falls back to a normal output device — enough to develop and test the
@@ -143,7 +147,7 @@ For cross-platform builds from any OS via GitHub Actions, see
 - [ ] Per-clip hotkey binding UI
 - [ ] Library import + drag-and-drop
 - [ ] Persisted device selection
-- [ ] GitHub Actions release pipeline (NSIS + portable)
+- [x] GitHub Actions release pipeline (NSIS installer)
 
 ## License
 
