@@ -1,0 +1,33 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "works.earendil.soundgrid",
+  "productName": "SoundGrid",
+  "directories": {
+    "output": "release"
+  },
+  "files": ["dist/**/*", "package.json"],
+  "asar": true,
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64"] },
+      { "target": "portable", "arch": ["x64"] }
+    ],
+    "artifactName": "SoundGrid-${version}-${arch}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "SoundGrid"
+  },
+  "mac": {
+    "target": ["dmg"],
+    "category": "public.app-category.music"
+  },
+  "linux": {
+    "target": ["AppImage"],
+    "category": "Audio"
+  }
+}

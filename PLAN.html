@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Soundboard — Project Plan</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --bg-soft: #161b22;
+        --bg-card: #1c2230;
+        --border: #2a3140;
+        --text: #e6edf3;
+        --text-dim: #9aa4b2;
+        --accent: #7c5cff;
+        --accent-2: #4fd1c5;
+        --warn: #f5a524;
+        --danger: #ff6b6b;
+        --ok: #4fd1c5;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: radial-gradient(
+          1200px 600px at 20% -10%,
+          #1a1430 0%,
+          var(--bg) 60%
+        );
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        line-height: 1.6;
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 64px 28px 96px;
+      }
+      header.hero {
+        text-align: center;
+        margin-bottom: 56px;
+      }
+      header.hero .eyebrow {
+        text-transform: uppercase;
+        letter-spacing: 3px;
+        font-size: 12px;
+        color: var(--accent-2);
+        margin-bottom: 14px;
+      }
+      header.hero h1 {
+        font-size: clamp(2.2rem, 5vw, 3.4rem);
+        margin: 0 0 12px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      header.hero p {
+        color: var(--text-dim);
+        max-width: 640px;
+        margin: 0 auto;
+      }
+      section {
+        background: var(--bg-soft);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 28px 30px;
+        margin-bottom: 24px;
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.02) inset,
+          0 10px 30px rgba(0, 0, 0, 0.25);
+      }
+      section h2 {
+        margin: 0 0 6px;
+        font-size: 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      section h2 .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        color: #fff;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      section h3 {
+        margin: 22px 0 8px;
+        font-size: 1.05rem;
+        color: var(--accent-2);
+      }
+      section .lead {
+        color: var(--text-dim);
+        margin-top: 0;
+      }
+      ul,
+      ol {
+        padding-left: 22px;
+      }
+      li {
+        margin: 6px 0;
+      }
+      li strong {
+        color: var(--text);
+      }
+      code {
+        background: #0b0f17;
+        border: 1px solid var(--border);
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-size: 0.88em;
+        color: var(--accent-2);
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+      }
+      .card .t {
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .card .d {
+        font-size: 0.88rem;
+        color: var(--text-dim);
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(124, 92, 255, 0.15);
+        color: var(--accent);
+        border: 1px solid rgba(124, 92, 255, 0.3);
+        margin-right: 6px;
+      }
+      .pill.ok {
+        background: rgba(79, 209, 197, 0.12);
+        color: var(--ok);
+        border-color: rgba(79, 209, 197, 0.3);
+      }
+      .pill.warn {
+        background: rgba(245, 165, 36, 0.12);
+        color: var(--warn);
+        border-color: rgba(245, 165, 36, 0.3);
+      }
+      .pill.danger {
+        background: rgba(255, 107, 107, 0.12);
+        color: var(--danger);
+        border-color: rgba(255, 107, 107, 0.3);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.92rem;
+      }
+      th {
+        color: var(--text-dim);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        letter-spacing: 1px;
+      }
+      .callout {
+        border-left: 3px solid var(--warn);
+        background: rgba(245, 165, 36, 0.07);
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin: 14px 0;
+        color: var(--text);
+      }
+      .callout.info {
+        border-color: var(--accent-2);
+        background: rgba(79, 209, 197, 0.07);
+      }
+      .names {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .name {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        cursor: pointer;
+        transition:
+          transform 0.12s ease,
+          border-color 0.12s ease,
+          background 0.12s ease;
+      }
+      .name:hover {
+        transform: translateY(-2px);
+        border-color: var(--accent);
+        background: #222a3a;
+      }
+      .name .n {
+        font-weight: 700;
+        font-size: 1.05rem;
+      }
+      .name .m {
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+      footer {
+        text-align: center;
+        color: var(--text-dim);
+        font-size: 0.85rem;
+        margin-top: 40px;
+      }
+      a {
+        color: var(--accent-2);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <div class="eyebrow">Project Plan · v0.1</div>
+        <h1>Soundboard</h1>
+        <p>
+          An open-source, cross-platform soundboard app (Windows-first) that
+          plays audio clips directly into your active microphone input — so
+          games, Discord, OBS, and any voice app hear your sounds as if they
+          came from your mic. No extra hardware. Distributed as a single
+          <code>.exe</code>.
+        </p>
+      </header>
+
+      <!-- 1. Everything we need -->
+      <section>
+        <h2><span class="num">1</span> Everything We Need</h2>
+        <p class="lead">
+          A breakdown of the building blocks required to ship this app for
+          Windows first, then macOS.
+        </p>
+
+        <h3>Core components</h3>
+        <ul>
+          <li>
+            <strong>GUI app shell</strong> — the main window with a grid of
+            sound buttons, a sidebar for categories, a search bar, and a
+            settings panel.
+          </li>
+          <li>
+            <strong>Audio engine</strong> — loads, decodes, and plays audio
+            files. Handles volume, looping, hotkeys, and overlapping playback
+            (so a new clip can cut off or layer on the previous one).
+          </li>
+          <li>
+            <strong>Mic injection layer</strong> — the hard part. Plays audio
+            <em>into the microphone stream</em> so other apps receive it as mic
+            input. Requires a virtual audio device (see §5).
+          </li>
+          <li>
+            <strong>Sound library / storage</strong> — a local folder (e.g.
+            <code>%APPDATA%/Soundboard/sounds</code>) where imported files live.
+            Plus a <code>library.json</code> index with names, categories,
+            hotkeys, and volume per clip.
+          </li>
+          <li>
+            <strong>Hotkey system</strong> — global keyboard shortcuts that work
+            even when the app is minimized (system-wide hotkeys), so you can
+            fire a sound mid-game.
+          </li>
+          <li>
+            <strong>Settings persistence</strong> — saves config (selected mic,
+            output volume, theme, hotkeys) to a JSON file in app data.
+          </li>
+          <li>
+            <strong>System tray integration</strong> — runs in the background,
+            quick access to mute, stop-all, and open the window.
+          </li>
+          <li>
+            <strong>Installer / packaging</strong> — produces a signed
+            <code>.exe</code> installer (or portable exe) for Windows; later a
+            <code>.dmg</code> for macOS.
+          </li>
+        </ul>
+
+        <h3>Suggested tech stack (open-source friendly)</h3>
+        <div class="cards">
+          <div class="card">
+            <div class="t">Electron + TypeScript</div>
+            <div class="d">
+              Cross-platform UI, easy packaging to .exe/.dmg. Large ecosystem.
+            </div>
+          </div>
+          <div class="card">
+            <div class="t">Tauri + Rust + TS</div>
+            <div class="d">
+              Smaller bundle, lower RAM, modern. Great for a lightweight .exe.
+            </div>
+          </div>
+          <div class="card">
+            <div class="t">.NET / WPF (C#)</div>
+            <div class="d">
+              Native Windows-first option, excellent audio & hotkey APIs.
+              Hardest to port to macOS.
+            </div>
+          </div>
+          <div class="card">
+            <div class="t">Virtual Audio Cable (VB-CABLE)</div>
+            <div class="d">
+              Free virtual mic driver we can bundle/recommend for mic injection.
+            </div>
+          </div>
+        </div>
+        <div class="callout info">
+          <strong>Recommended path:</strong> Tauri (or Electron) + TypeScript
+          for the cross-platform UI, with a small native helper for the
+          audio/mic-injection on Windows. Recommend VB-CABLE as the virtual mic
+          device on first run, and document a one-click setup. This keeps it
+          open-source, scriptable, and shippable as a single .exe.
+        </div>
+      </section>
+
+      <!-- 2. Settings -->
+      <section>
+        <h2><span class="num">2</span> Settings We Need</h2>
+        <p class="lead">
+          What the settings panel should expose. Keep it small but complete.
+        </p>
+
+        <table>
+          <tr>
+            <th>Setting</th>
+            <th>Type</th>
+            <th>Notes</th>
+          </tr>
+          <tr>
+            <td>Microphone output device</td>
+            <td>Dropdown</td>
+            <td>The virtual cable / mic the sounds are routed to.</td>
+          </tr>
+          <tr>
+            <td>Headphone monitor device</td>
+            <td>Dropdown</td>
+            <td>
+              Where YOU hear the sound (your headset). Can = "None" for silent
+              injection.
+            </td>
+          </tr>
+          <tr>
+            <td>Passthrough real mic</td>
+            <td>Toggle</td>
+            <td>
+              Let your real mic still be heard while sounds play (mix). Default
+              ON.
+            </td>
+          </tr>
+          <tr>
+            <td>Master volume (mic)</td>
+            <td>0–100%</td>
+            <td>Volume sent to the mic stream.</td>
+          </tr>
+          <tr>
+            <td>Monitor volume (headphones)</td>
+            <td>0–100%</td>
+            <td>Volume you hear locally; independent of mic output.</td>
+          </tr>
+          <tr>
+            <td>Overlap behavior</td>
+            <td>Stop / Overlap / Queue</td>
+            <td>
+              What happens when a new sound is fired while one is playing.
+            </td>
+          </tr>
+          <tr>
+            <td>Stop-all hotkey</td>
+            <td>Keybind</td>
+            <td>Kills every currently playing sound instantly.</td>
+          </tr>
+          <tr>
+            <td>Per-clip hotkeys</td>
+            <td>Keybind</td>
+            <td>One global shortcut per sound button.</td>
+          </tr>
+          <tr>
+            <td>Per-clip volume</td>
+            <td>0–100%</td>
+            <td>Override master for individual clips.</td>
+          </tr>
+          <tr>
+            <td>Per-clip loop</td>
+            <td>Toggle</td>
+            <td>Loop a clip until stopped.</td>
+          </tr>
+          <tr>
+            <td>Categories / tags</td>
+            <td>Text</td>
+            <td>Group sounds; filter by tag.</td>
+          </tr>
+          <tr>
+            <td>Theme</td>
+            <td>Dark / Light / System</td>
+            <td>UI appearance.</td>
+          </tr>
+          <tr>
+            <td>Run on startup</td>
+            <td>Toggle</td>
+            <td>Auto-launch with the OS.</td>
+          </tr>
+          <tr>
+            <td>Minimize to tray</td>
+            <td>Toggle</td>
+            <td>Keep running in background when closed.</td>
+          </tr>
+          <tr>
+            <td>Audio device auto-select</td>
+            <td>Toggle</td>
+            <td>Follow the system default mic automatically.</td>
+          </tr>
+        </table>
+      </section>
+
+      <!-- 3. Audio files -->
+      <section>
+        <h2><span class="num">3</span> Supported Audio Files</h2>
+        <p class="lead">
+          Decide what formats the library accepts and what gets converted
+          internally.
+        </p>
+
+        <h3>Supported on import</h3>
+        <ul>
+          <li>
+            <span class="pill ok">MP3</span> Most common, small, great for
+            clips.
+          </li>
+          <li>
+            <span class="pill ok">WAV</span> Lossless, instant seek, zero decode
+            overhead — best for short SFX.
+          </li>
+          <li>
+            <span class="pill ok">OGG / Vorbis</span> Open format, good
+            compression.
+          </li>
+          <li>
+            <span class="pill ok">FLAC</span> Lossless, larger files — supported
+            but not necessary.
+          </li>
+          <li>
+            <span class="pill ok">M4A / AAC</span> Common on macOS / iTunes
+            libraries.
+          </li>
+          <li>
+            <span class="pill warn">OPUS</span> Nice-to-have, great quality per
+            byte.
+          </li>
+        </ul>
+
+        <h3>Recommendation</h3>
+        <div class="callout info">
+          Accept <strong>MP3, WAV, OGG, M4A/AAC, FLAC</strong> on import.
+          Internally decode with a single audio backend (e.g. FFmpeg / miniaudio
+          / Howler) so every format Just Works. Optionally normalize loud clips
+          to a target peak so the mic output doesn't clip.
+        </div>
+        <p>
+          <span class="pill danger">Not recommended</span> Avoid streaming-only
+          / DRM formats and raw containerless bitstreams. No video files — if a
+          user drops an <code>.mp4</code>, extract and import the audio track
+          only.
+        </p>
+      </section>
+
+      <!-- 4. Important to know -->
+      <section>
+        <h2><span class="num">4</span> Important to Know</h2>
+        <ul>
+          <li>
+            <strong>Windows mic injection is not built into the OS.</strong> You
+            cannot simply "play to the microphone." You need a
+            <em>virtual audio device</em> that acts as a fake mic. Apps like
+            Soundpad ship their own signed kernel driver; an open-source project
+            should rely on a free virtual cable (VB-CABLE) or build its own WDM
+            driver (much harder, requires signing).
+          </li>
+          <li>
+            <strong>Driver signing.</strong> On Windows 10/11 x64, kernel
+            drivers must be WHQL-signed or run with test-signing on. This is why
+            bundling a third-party free cable is the pragmatic open-source
+            route.
+          </li>
+          <li>
+            <strong>You still need to mix your real mic in.</strong> If you
+            route sounds to the virtual cable, apps won't hear your real voice
+            unless the app mixes real-mic + cable, or our app does the mixing.
+            So we should capture the real mic and mix it with the sounds before
+            sending to the virtual device.
+          </li>
+          <li>
+            <strong>Latency matters.</strong> For gaming/Discord use, keep
+            round-trip latency under ~50ms. Use WASAPI exclusive or low-buffer
+            shared mode on Windows.
+          </li>
+          <li>
+            <strong>Global hotkeys require OS hooks.</strong> On Windows this is
+            <code>RegisterHotKey</code> / low-level keyboard hook; on macOS it
+            needs Accessibility permissions.
+          </li>
+          <li>
+            <strong>Privacy & permissions.</strong> Recording/mixing the real
+            microphone triggers OS microphone privacy prompts on both Windows
+            and macOS — the app must declare and request mic access.
+          </li>
+          <li>
+            <strong>Single .exe expectation.</strong> Bundle the app + audio
+            engine into one installer. The virtual cable driver is the one
+            external piece — ship a guided installer for it, or auto-detect and
+            prompt.
+          </li>
+          <li>
+            <strong>Open-source license.</strong> Pick a permissive license (MIT
+            or GPLv3). If we depend on VB-CABLE, note that VB-CABLE itself is
+            donationware, not strictly OSS — so long-term we may want our own
+            driver or a truly OSS virtual device.
+          </li>
+          <li>
+            <strong>Distribution size.</strong> Electron ≈ 80–150MB; Tauri ≈
+            5–15MB. For a "download and run" .exe, Tauri is dramatically leaner.
+          </li>
+        </ul>
+      </section>
+
+      <!-- 5. Mic-only player -->
+      <section>
+        <h2><span class="num">5</span> Pause / Player — Microphone Only</h2>
+        <p class="lead">
+          A dedicated "mic player" whose job is only to feed the microphone
+          stream. It is independent of what you hear.
+        </p>
+
+        <ul>
+          <li>
+            <strong>Separate play/pause for the mic stream.</strong> The mic
+            player can be paused without affecting your local monitor. So you
+            can keep listening to a clip in your headphones while it is
+            <em>not</em> being broadcast to others.
+          </li>
+          <li>
+            <strong>Mic pause button</strong> — a global toggle (and a hotkey)
+            that mutes/pauses everything going to the mic while leaving local
+            playback running. Useful for "let me preview this before I send it."
+          </li>
+          <li>
+            <strong>Mic mute toggle</strong> — hard mute of the mic output (the
+            virtual device receives silence) while your real voice (if mixed)
+            still works. Different from pausing a clip: this mutes the whole mic
+            channel.
+          </li>
+          <li>
+            <strong>Independent transport.</strong> Play / Pause / Stop / Loop
+            controls for the mic output, separate from the headphone monitor.
+            Two transport bars in the UI: <span class="pill">Mic out</span> and
+            <span class="pill ok">Headphones</span>.
+          </li>
+          <li>
+            <strong>Per-clip mic enable.</strong> A clip can be marked "monitor
+            only" (heard by you, not sent to mic) or "broadcast" (sent to mic).
+            Great for testing clips before going live.
+          </li>
+        </ul>
+
+        <div class="callout">
+          <strong>In short:</strong> the mic player is its own pipeline with its
+          own play/pause/mute, fully decoupled from your headphone listening.
+          You control what others hear independently from what you hear.
+        </div>
+      </section>
+
+      <!-- 6. Headsets routing -->
+      <section>
+        <h2>
+          <span class="num">6</span> Headset Routing — Mic Out &amp; Headphone
+          Out Only
+        </h2>
+        <p class="lead">
+          Strict two-output model: one stream goes to the microphone, one stream
+          goes to your headphones. Nothing else.
+        </p>
+
+        <h3>Routing model</h3>
+        <ul>
+          <li>
+            <strong>Mic output</strong> → the selected virtual audio device
+            (what apps see as your microphone).
+            <em>Only this output is heard by other people.</em>
+          </li>
+          <li>
+            <strong>Headphone output</strong> → your headset / default playback
+            device. <em>Only this output is heard by you.</em>
+          </li>
+          <li>
+            <strong>No third output.</strong> The app never sends audio to
+            system speakers, default audio out, or any other device. Just the
+            two named outputs.
+          </li>
+          <li>
+            <strong>Headset-only mode.</strong> When enabled, monitor audio is
+            forced to the currently selected headset and never leaks to speakers
+            — useful on systems where the default device is desktop speakers.
+          </li>
+          <li>
+            <strong>Mic-only mode.</strong> When enabled, the clip is sent only
+            to the mic output and you hear nothing locally (pure "broadcast a
+            sound" mode).
+          </li>
+        </ul>
+
+        <h3>Signal flow</h3>
+        <pre
+          style="
+            background: #0b0f17;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            overflow: auto;
+            color: #cfe8e3;
+            font-size: 0.82rem;
+          "
+        >
+Sound clip
+   │
+   ├──► [Mic bus]   ──► volume ──► Virtual Audio Cable  ──► apps hear it as mic
+   │                                  (+ mixed with your real mic if passthrough ON)
+   │
+   └──► [Monitor bus] ──► volume ──► Headset / headphones  ──► only YOU hear it
+</pre>
+        <div class="callout info">
+          Two buses, two destinations, two independent volumes and play/pause
+          states. The mic bus never touches the headphone device, and the
+          monitor bus never touches the mic device. Exactly the Soundpad
+          behavior, made explicit.
+        </div>
+      </section>
+
+      <!-- 7. Names -->
+      <section>
+        <h2><span class="num">7</span> Name Ideas</h2>
+        <p class="lead">
+          Click any to highlight — pick your favorite and we'll lock it in.
+          Aimed at "soundboard + audio" vibes, short and brandable.
+        </p>
+        <div class="names">
+          <div class="name">
+            <div class="n">EchoDeck</div>
+            <div class="m">sound deck / echo</div>
+          </div>
+          <div class="name">
+            <div class="n">SoundForge</div>
+            <div class="m">already a known product — skip</div>
+          </div>
+          <div class="name">
+            <div class="n">MicCast</div>
+            <div class="m">cast to mic</div>
+          </div>
+          <div class="name">
+            <div class="n">BoardBeats</div>
+            <div class="m">board + beats</div>
+          </div>
+          <div class="name">
+            <div class="n">ClipCaster</div>
+            <div class="m">casts clips to mic</div>
+          </div>
+          <div class="name">
+            <div class="n">SoundSpike</div>
+            <div class="m">spike of audio</div>
+          </div>
+          <div class="name">
+            <div class="n">AudioDeck</div>
+            <div class="m">simple, clear</div>
+          </div>
+          <div class="name">
+            <div class="n">VoiceBox</div>
+            <div class="m">voice + box</div>
+          </div>
+          <div class="name">
+            <div class="n">ResoundBoard</div>
+            <div class="m">resound + board</div>
+          </div>
+          <div class="name">
+            <div class="n">Playthru</div>
+            <div class="m">play-through to mic</div>
+          </div>
+          <div class="name">
+            <div class="n">SoundGrid</div>
+            <div class="m">grid of sounds</div>
+          </div>
+          <div class="name">
+            <div class="n">MicSpool</div>
+            <div class="m">spool of clips to mic</div>
+          </div>
+          <div class="name">
+            <div class="n">Claxon</div>
+            <div class="m">loud sound, short</div>
+          </div>
+          <div class="name">
+            <div class="n">TonePad</div>
+            <div class="m">tone launchpad</div>
+          </div>
+          <div class="name">
+            <div class="n">BoomDeck</div>
+            <div class="m">boom + deck</div>
+          </div>
+          <div class="name">
+            <div class="n">MicBlaster</div>
+            <div class="m">blast sounds to mic</div>
+          </div>
+          <div class="name">
+            <div class="n">SoundSlot</div>
+            <div class="m">slot for a sound</div>
+          </div>
+          <div class="name">
+            <div class="n">Audioloop</div>
+            <div class="m">audio loops</div>
+          </div>
+          <div class="name">
+            <div class="n">DropBoard</div>
+            <div class="m">drop a sound</div>
+          </div>
+          <div class="name">
+            <div class="n">VoxDeck</div>
+            <div class="m">vox (voice) + deck</div>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        Open-source soundboard · Windows-first · cross-platform later · plan
+        drafted 2026-06-30
+      </footer>
+    </div>
+  </body>
+</html>
