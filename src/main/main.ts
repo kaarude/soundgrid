@@ -130,9 +130,10 @@ class SoundGrid {
       const added = await this.library.importFiles(filePaths);
       return added;
     });
-    ipcMain.handle(IPC.LIBRARY_REMOVE, (_e, id: string) =>
-      this.library.removeClip(id),
-    );
+    ipcMain.handle(IPC.LIBRARY_REMOVE, async (_e, id: string) => {
+      await this.library.removeClip(id);
+      this.registerPersistedHotkeys();
+    });
     ipcMain.handle(
       IPC.LIBRARY_UPDATE_CLIP,
       async (_e, id: string, patch: SoundClipPatch) => {
