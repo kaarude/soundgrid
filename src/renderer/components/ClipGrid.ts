@@ -9,36 +9,87 @@ import { SoundCard } from "./SoundCard";
 
 export function ClipGrid(): HTMLElement {
   const el = document.createElement("main");
-  el.className = "grid";
+  el.className = "library";
   el.setAttribute("aria-label", "Sound clips");
   return el;
 }
 
 export function syncClipGrid(): void {
-  const grid = document.querySelector<HTMLElement>(".grid");
-  if (!grid) return;
-  const { clips, filter, activeCategory } = store.state;
+  const library = document.querySelector<HTMLElement>(".library");
+  if (!library) return;
+  const { clips, filter, activeLibraryView, soundsCollapsed } = store.state;
+  const hasFavorites = clips.some((clip) => clip.favorite);
+  const currentView = hasFavorites ? activeLibraryView : "all";
   const list = clips.filter((c) => {
-    const inCat = activeCategory === "All" || c.category === activeCategory;
+    const inView = currentView === "all" || c.favorite;
     const inSearch = !filter || c.name.toLowerCase().includes(filter);
-    return inCat && inSearch;
+    return inView && inSearch;
   });
 
-  grid.innerHTML = "";
+  library.innerHTML = "";
 
   if (clips.length === 0) {
-    grid.append(FirstRun());
+    library.append(FirstRun());
     return;
   }
+
+  const header = document.createElement("header");
+  header.className = "library-header";
+  const tabs = document.createElement("div");
+  tabs.className = "library-tabs";
+  tabs.setAttribute("role", "tablist");
+  if (hasFavorites) tabs.append(ViewTab("favorites", "Favorites"));
+  tabs.append(ViewTab("all", "All sounds"));
+
+  const collapse = document.createElement("button");
+  collapse.type = "button";
+  collapse.className = "library-collapse";
+  collapse.setAttribute("aria-expanded", String(!soundsCollapsed));
+  collapse.setAttribute(
+    "aria-label",
+    soundsCollapsed ? "Expand sounds" : "Collapse sounds",
+  );
+  collapse.title = soundsCollapsed ? "Expand sounds" : "Collapse sounds";
+  collapse.append(icon.chevron());
+  collapse.addEventListener("click", () =>
+    store.update({ soundsCollapsed: !store.state.soundsCollapsed }),
+  );
+  header.append(tabs, collapse);
+  library.append(header);
+
+  if (soundsCollapsed) {
+    library.classList.add("is-collapsed");
+    return;
+  }
+  library.classList.remove("is-collapsed");
+
+  const grid = document.createElement("div");
+  grid.className = "grid";
   if (list.length === 0) {
     const empty = document.createElement("div");
     empty.className = "grid-empty";
-    empty.textContent = "No clips match your search.";
+    empty.textContent = filter
+      ? "No sounds match your search."
+      : "Star a sound to keep it in Favorites.";
     grid.append(empty);
-    return;
+  } else {
+    for (const clip of list) grid.append(SoundCard(clip));
   }
+  library.append(grid);
+}
 
-  for (const clip of list) grid.append(SoundCard(clip));
+function ViewTab(view: "favorites" | "all", label: string): HTMLButtonElement {
+  const button = document.createElement("button");
+  const selected = store.state.activeLibraryView === view;
+  button.type = "button";
+  button.className = "library-tab" + (selected ? " is-active" : "");
+  button.setAttribute("role", "tab");
+  button.setAttribute("aria-selected", String(selected));
+  button.textContent = label;
+  button.addEventListener("click", () =>
+    store.update({ activeLibraryView: view }),
+  );
+  return button;
 }
 
 function FirstRun(): HTMLElement {

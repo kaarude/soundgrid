@@ -56,7 +56,7 @@ export class LibraryStore {
         id,
         name: path.basename(file, ext),
         filePath: dest,
-        category: "Uncategorized",
+        favorite: false,
         volume: 1,
         loop: false,
         broadcast: true,
@@ -92,11 +92,7 @@ export class LibraryStore {
 
   private async persist() {
     const file: LibraryFile = { clips: this.clips };
-    await fs.writeFile(
-      this.dbPath,
-      JSON.stringify(file, null, 2),
-      "utf8",
-    );
+    await fs.writeFile(this.dbPath, JSON.stringify(file, null, 2), "utf8");
   }
 }
 
@@ -118,9 +114,13 @@ function isSoundClip(value: unknown): value is SoundClip {
 }
 
 function normalizeClip(clip: SoundClip): SoundClip {
+  // Drop the legacy category field while migrating existing libraries.
+  const { category: _legacyCategory, ...rest } = clip as SoundClip & {
+    category?: string;
+  };
   return {
-    ...clip,
-    category: clip.category || "Uncategorized",
+    ...rest,
+    favorite: Boolean(clip.favorite),
     volume: clamp01(Number.isFinite(clip.volume) ? clip.volume : 1),
     loop: Boolean(clip.loop),
     broadcast: clip.broadcast !== false,
@@ -130,9 +130,7 @@ function normalizeClip(clip: SoundClip): SoundClip {
 function sanitizeClipPatch(patch: SoundClipPatch): SoundClipPatch {
   const next: SoundClipPatch = {};
   if (typeof patch.name === "string") next.name = patch.name.slice(0, 120);
-  if (typeof patch.category === "string") {
-    next.category = patch.category.slice(0, 80) || "Uncategorized";
-  }
+  if (typeof patch.favorite === "boolean") next.favorite = patch.favorite;
   if (typeof patch.hotkey === "string") next.hotkey = patch.hotkey.slice(0, 80);
   else if (patch.hotkey === undefined) next.hotkey = undefined;
   if (typeof patch.volume === "number") next.volume = clamp01(patch.volume);

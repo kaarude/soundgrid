@@ -506,17 +506,104 @@ body {
   flex: 0 0 44px;
 }
 
-/* ---------- Clip grid ---------- */
-.grid {
+/* ---------- Sound library ---------- */
+.library {
   min-width: 0;
   min-height: 0;
   padding: 20px;
   overflow-y: auto;
+  background: #0a0f16;
+}
+.library.is-collapsed {
+  overflow: hidden;
+}
+.library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--border);
+}
+.library.is-collapsed .library-header {
+  margin-bottom: 0;
+}
+.library-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+.library-tab {
+  appearance: none;
+  position: relative;
+  height: 40px;
+  padding: 0 2px;
+  background: transparent;
+  color: var(--text-dim);
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out-quint);
+}
+.library-tab::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--dur-fast) var(--ease-out-quint);
+}
+.library-tab:hover,
+.library-tab.is-active {
+  color: var(--text);
+}
+.library-tab.is-active::after {
+  transform: scaleX(1);
+}
+.library-tab:focus-visible,
+.library-collapse:focus-visible,
+.card-favorite:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.library-collapse {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out-quint),
+    background var(--dur-fast) var(--ease-out-quint);
+}
+.library-collapse:hover {
+  color: var(--text);
+  background: var(--bg-card);
+}
+.library-collapse svg {
+  transform: rotate(-90deg);
+  transition: transform var(--dur-fast) var(--ease-out-quint);
+}
+.library.is-collapsed .library-collapse svg {
+  transform: rotate(90deg);
+}
+.grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
   gap: var(--space-md);
   align-content: start;
-  background: #0a0f16;
 }
 .grid-empty {
   grid-column: 1 / -1;
@@ -531,7 +618,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   padding: var(--space-md);
-  padding-right: 38px;
+  padding-right: 70px;
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
@@ -559,14 +646,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.card-cat {
-  margin-top: 2px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--text-dim);
 }
 .card-meta {
   display: flex;
@@ -650,6 +729,37 @@ body {
     border-color var(--dur-fast) var(--ease-out-quint),
     color var(--dur-fast) var(--ease-out-quint),
     transform var(--dur-fast) var(--ease-out-quint);
+}
+.card-favorite {
+  position: absolute;
+  top: 12px;
+  right: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out-quint),
+    background var(--dur-fast) var(--ease-out-quint),
+    transform var(--dur-fast) var(--ease-out-quint);
+}
+.card-favorite:hover {
+  color: var(--text);
+  background: var(--bg);
+  transform: scale(1.06);
+}
+.card-favorite.is-favorite {
+  color: var(--accent-2);
+}
+.card-favorite.is-favorite svg {
+  fill: currentColor;
 }
 .card-menu:hover,
 .card-menu[aria-expanded="true"] {
@@ -1518,7 +1628,7 @@ body {
   .sidebar.is-collapsed .import {
     margin: 0;
   }
-  .grid {
+  .library {
     padding: var(--space-md);
   }
 }
