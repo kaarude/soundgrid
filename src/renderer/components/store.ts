@@ -3,6 +3,7 @@
 
 import {
   AudioDevice,
+  CableStatus,
   DEFAULT_SETTINGS,
   Settings,
   SoundClip,
@@ -32,6 +33,11 @@ export interface State {
   monitorMuted: boolean;
   micVolume: number; // 0..1
   monitorVolume: number; // 0..1
+  micLevel: number;
+  monitorLevel: number;
+  audioError: string | null;
+  cableStatus: CableStatus | null;
+  cableInstalling: boolean;
   // ui
   settingsOpen: boolean;
 }
@@ -74,5 +80,10 @@ export const store = new Store({
   monitorMuted: false,
   micVolume: 0.9,
   monitorVolume: 0.8,
+  micLevel: 0,
+  monitorLevel: 0,
+  audioError: null,
+  cableStatus: null,
+  cableInstalling: false,
   settingsOpen: false,
 });

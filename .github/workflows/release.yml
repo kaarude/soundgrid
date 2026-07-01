@@ -29,11 +29,17 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Check TypeScript
         run: pnpm check
+
+      - name: Check native audio engine
+        run: cargo check --locked --manifest-path native/audio-engine/Cargo.toml
 
       - name: Build installer
         run: pnpm dist:installer

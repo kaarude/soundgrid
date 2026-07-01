@@ -1,134 +1,295 @@
-import { SoundClip } from "../shared/types.js";
+import { app } from "electron";
+import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import readline from "node:readline";
+import {
+  AudioDevices,
+  AudioEngineEvent,
+  Settings,
+  SoundClip,
+} from "../shared/types.js";
 
-// ---------------------------------------------------------------------------
-// AudioEngine
-//
-// SoundGrid uses TWO independent audio buses, exactly as the plan describes:
-//
-//   mic bus     -> the selected "mic output" device (virtual audio cable).
-//                  This is what other apps (Discord, OBS, games) hear as your mic.
-//   monitor bus -> your headset / headphones. Only YOU hear this.
-//
-// Each bus has its own play / pause / stop / volume / mute state. They are
-// fully decoupled: pausing the mic bus does NOT pause the monitor bus.
-//
-// IMPLEMENTATION NOTE (the hard part):
-// Real "play into the microphone" is not a capability of the Web Audio API or
-// of Electron on its own. It requires a virtual audio device on the system.
-// On Windows the user installs a free virtual cable (e.g. VB-CABLE) and we
-// send the mic bus to that device's name; other apps then select that cable
-// as their microphone. Mixing in the real physical mic is done by capturing
-// it via getUserMedia and summing into the mic-bus graph.
-//
-// On macOS (dev) we cannot truly inject into a mic, so the mic bus falls back
-// to a normal output device so the UI/transport can be developed and tested.
-// The Windows production build uses a native WASAPI helper (planned) to
-// render the mic bus to the chosen virtual device directly.
-// ---------------------------------------------------------------------------
+type Bus = "mic" | "monitor";
 
-interface PlayingClip {
-  clip: SoundClip;
-  startedAt: number;
-  paused: boolean;
+interface NativeDevice {
+  id: string;
+  label: string;
 }
 
-export class AudioEngine {
-  // On a real build these are AudioContext graphs. We keep lightweight state
-  // here so the UI transport works during development and the surface matches
-  // what the native audio helper will plug into.
-  private micPlaying: Map<string, PlayingClip> = new Map();
-  private monitorPlaying: PlayingClip | null = null;
+type NativeEvent =
+  | { type: "ready" }
+  | { type: "devices"; outputs: NativeDevice[]; inputs: NativeDevice[] }
+  | { type: "meter"; mic: number; monitor: number }
+  | { type: "clipEnded"; bus: Bus; clipId: string }
+  | { type: "error"; message: string };
 
+export class AudioEngine {
+  private process?: ChildProcessWithoutNullStreams;
+  private ready = false;
+  private currentSettings?: Settings;
+  private deviceWaiters: Array<(devices: AudioDevices) => void> = [];
+  private eventHandler?: (event: AudioEngineEvent) => void;
   private micMuted = false;
   private monitorMuted = false;
-  private micVolume = 0.9;
-  private monitorVolume = 0.8;
 
-  // ---- Mic bus ----
-  async playBoth(clip: SoundClip | undefined) {
-    await Promise.all([this.playToMic(clip), this.playToMonitor(clip)]);
-  }
+  async start(settings: Settings): Promise<void> {
+    this.currentSettings = settings;
+    const executable = findNativeExecutable();
+    if (!executable) {
+      this.emit({
+        type: "error",
+        message:
+          "The native audio engine is not built. Run `pnpm build:native` and restart SoundGrid.",
+      });
+      return;
+    }
 
-  async playToMic(clip: SoundClip | undefined) {
-    if (!clip) return;
-    this.micPlaying.set(clip.id, {
-      clip,
-      startedAt: Date.now(),
-      paused: false,
+    await new Promise<void>((resolve) => {
+      const child = spawn(executable, [], {
+        stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
+      });
+      this.process = child;
+      const timeout = setTimeout(() => {
+        this.emit({ type: "error", message: "Native audio engine startup timed out." });
+        resolve();
+      }, 5_000);
+
+      readline.createInterface({ input: child.stdout }).on("line", (line) => {
+        let event: NativeEvent;
+        try {
+          event = JSON.parse(line) as NativeEvent;
+        } catch {
+          this.emit({ type: "error", message: `Invalid native audio response: ${line}` });
+          return;
+        }
+        if (event.type === "ready" && !this.ready) {
+          clearTimeout(timeout);
+          this.ready = true;
+          this.configure(settings);
+          resolve();
+        }
+        this.handleNativeEvent(event);
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        this.emit({ type: "error", message: chunk.toString("utf8").trim() });
+      });
+      child.on("error", (error) => {
+        clearTimeout(timeout);
+        this.emit({ type: "error", message: `Cannot start audio engine: ${error.message}` });
+        resolve();
+      });
+      child.on("exit", (code, signal) => {
+        this.ready = false;
+        this.process = undefined;
+        if (code !== 0 && signal !== "SIGTERM") {
+          this.emit({
+            type: "error",
+            message: `Audio engine stopped unexpectedly (${code ?? signal ?? "unknown"}).`,
+          });
+        }
+      });
     });
-    // TODO(win): route decoded PCM to the selected virtual audio cable device.
   }
 
-  pauseMic() {
-    for (const p of this.micPlaying.values()) p.paused = true;
+  onEvent(handler: (event: AudioEngineEvent) => void): void {
+    this.eventHandler = handler;
   }
 
-  resumeMic() {
-    for (const p of this.micPlaying.values()) p.paused = false;
+  async listDevices(): Promise<AudioDevices> {
+    if (!this.ready) return emptyDevices();
+    return new Promise<AudioDevices>((resolve) => {
+      const waiter = (devices: AudioDevices) => {
+        clearTimeout(timeout);
+        resolve(devices);
+      };
+      const timeout = setTimeout(() => {
+        const index = this.deviceWaiters.indexOf(waiter);
+        if (index >= 0) this.deviceWaiters.splice(index, 1);
+        resolve(emptyDevices());
+      }, 2_000);
+      this.deviceWaiters.push(waiter);
+      this.send({ type: "listDevices" });
+    });
   }
 
-  stopMic() {
-    this.micPlaying.clear();
+  applySettings(settings: Settings): void {
+    const previous = this.currentSettings;
+    this.currentSettings = settings;
+    if (!previous || routingChanged(previous, settings)) this.configure(settings);
+    else {
+      this.setMicVolume(settings.masterMicVolume);
+      this.setMonitorVolume(settings.monitorVolume);
+    }
   }
 
-  stopAll() {
-    this.stopMic();
-    this.stopMonitor();
-  }
-
-  setMicMute(muted: boolean) {
-    this.micMuted = muted;
-  }
-
-  toggleMicMute() {
-    this.micMuted = !this.micMuted;
-    return this.micMuted;
-  }
-
-  setMicVolume(v: number) {
-    this.micVolume = Math.max(0, Math.min(1, v));
-  }
-
-  isMicMuted() {
-    return this.micMuted;
-  }
-
-  // ---- Monitor bus (headphones only) ----
-  async playToMonitor(clip: SoundClip | undefined) {
+  async playBoth(clip: SoundClip | undefined): Promise<void> {
     if (!clip) return;
-    this.monitorPlaying = { clip, startedAt: Date.now(), paused: false };
-    // TODO: play through the Web Audio API to the selected monitor device.
+    const settings = this.currentSettings;
+    const jobs: Promise<void>[] = [];
+    if (clip.broadcast) jobs.push(this.playToMic(clip));
+    if (!settings?.micOnly) jobs.push(this.playToMonitor(clip));
+    await Promise.all(jobs);
   }
 
-  pauseMonitor() {
-    if (this.monitorPlaying) this.monitorPlaying.paused = true;
+  async playToMic(clip: SoundClip | undefined): Promise<void> {
+    if (!clip || !clip.broadcast) return;
+    this.play("mic", clip);
+    this.emit({
+      type: "transport",
+      bus: "mic",
+      state: "playing",
+      clipId: clip.id,
+      name: clip.name,
+    });
   }
 
-  resumeMonitor() {
-    if (this.monitorPlaying) this.monitorPlaying.paused = false;
+  async playToMonitor(clip: SoundClip | undefined): Promise<void> {
+    if (!clip) return;
+    this.play("monitor", clip);
+    this.emit({
+      type: "transport",
+      bus: "monitor",
+      state: "playing",
+      clipId: clip.id,
+      name: clip.name,
+    });
   }
 
-  stopMonitor() {
-    this.monitorPlaying = null;
+  pauseMic(): void {
+    this.send({ type: "pause", bus: "mic" });
+    this.emit({ type: "transport", bus: "mic", state: "paused" });
   }
-
-  setMonitorMute(muted: boolean) {
+  resumeMic(): void {
+    this.send({ type: "resume", bus: "mic" });
+    this.emit({ type: "transport", bus: "mic", state: "playing" });
+  }
+  stopMic(): void {
+    this.send({ type: "stop", bus: "mic" });
+    this.emit({ type: "transport", bus: "mic", state: "stopped" });
+  }
+  pauseMonitor(): void {
+    this.send({ type: "pause", bus: "monitor" });
+    this.emit({ type: "transport", bus: "monitor", state: "paused" });
+  }
+  resumeMonitor(): void {
+    this.send({ type: "resume", bus: "monitor" });
+    this.emit({ type: "transport", bus: "monitor", state: "playing" });
+  }
+  stopMonitor(): void {
+    this.send({ type: "stop", bus: "monitor" });
+    this.emit({ type: "transport", bus: "monitor", state: "stopped" });
+  }
+  stopAll(): void {
+    this.send({ type: "stopAll" });
+    this.emit({ type: "transport", bus: "mic", state: "stopped" });
+    this.emit({ type: "transport", bus: "monitor", state: "stopped" });
+  }
+  setMicMute(muted: boolean): void {
+    this.micMuted = muted;
+    this.send({ type: "setMute", bus: "mic", muted });
+    this.emit({ type: "mute", bus: "mic", muted });
+  }
+  toggleMicMute(): boolean {
+    this.setMicMute(!this.micMuted);
+    return this.micMuted;
+  }
+  setMonitorMute(muted: boolean): void {
     this.monitorMuted = muted;
+    this.send({ type: "setMute", bus: "monitor", muted });
+    this.emit({ type: "mute", bus: "monitor", muted });
+  }
+  setMicVolume(volume: number): void {
+    this.send({ type: "setVolume", bus: "mic", volume: clamp01(volume) });
+  }
+  setMonitorVolume(volume: number): void {
+    this.send({ type: "setVolume", bus: "monitor", volume: clamp01(volume) });
   }
 
-  setMonitorVolume(v: number) {
-    this.monitorVolume = Math.max(0, Math.min(1, v));
+  shutdown(): void {
+    this.send({ type: "shutdown" });
+    this.process?.kill();
+    this.process = undefined;
+    this.ready = false;
   }
 
-  getMicVolume() {
-    return this.micVolume;
+  private play(bus: Bus, clip: SoundClip): void {
+    this.send({
+      type: "play",
+      bus,
+      clipId: clip.id,
+      path: clip.filePath,
+      volume: clamp01(clip.volume),
+      looped: clip.loop,
+    });
   }
 
-  getMonitorVolume() {
-    return this.monitorVolume;
+  private configure(settings: Settings): void {
+    this.send({
+      type: "configure",
+      micOutputDeviceId: settings.micOutputDeviceId,
+      monitorDeviceId: settings.monitorDeviceId,
+      realMicDeviceId: settings.realMicDeviceId,
+      passthrough: settings.passthrough,
+      micVolume: clamp01(settings.masterMicVolume),
+      monitorVolume: clamp01(settings.monitorVolume),
+      overlap: settings.overlap,
+    });
   }
 
-  isMonitorMuted() {
-    return this.monitorMuted;
+  private send(command: Record<string, unknown>): void {
+    if (!this.ready || !this.process?.stdin.writable) return;
+    this.process.stdin.write(`${JSON.stringify(command)}\n`);
   }
+
+  private handleNativeEvent(event: NativeEvent): void {
+    if (event.type === "devices") {
+      const devices: AudioDevices = {
+        micOutputs: event.outputs,
+        monitors: event.outputs,
+        realMics: event.inputs,
+      };
+      for (const resolve of this.deviceWaiters.splice(0)) resolve(devices);
+    } else if (event.type === "meter") {
+      this.emit({ type: "meter", mic: event.mic, monitor: event.monitor });
+    } else if (event.type === "clipEnded") {
+      this.emit(event);
+    } else if (event.type === "error") {
+      this.emit(event);
+    }
+  }
+
+  private emit(event: AudioEngineEvent): void {
+    this.eventHandler?.(event);
+  }
+}
+
+function findNativeExecutable(): string | undefined {
+  const filename = process.platform === "win32" ? "soundgrid-audio.exe" : "soundgrid-audio";
+  const candidates = [
+    process.env.SOUNDGRID_AUDIO_ENGINE,
+    app.isPackaged ? path.join(process.resourcesPath, "native", filename) : undefined,
+    path.join(app.getAppPath(), "native", "audio-engine", "target", "release", filename),
+    path.join(app.getAppPath(), "native", "audio-engine", "target", "debug", filename),
+  ].filter((value): value is string => Boolean(value));
+  return candidates.find(existsSync);
+}
+
+function routingChanged(a: Settings, b: Settings): boolean {
+  return (
+    a.micOutputDeviceId !== b.micOutputDeviceId ||
+    a.monitorDeviceId !== b.monitorDeviceId ||
+    a.realMicDeviceId !== b.realMicDeviceId ||
+    a.passthrough !== b.passthrough ||
+    a.overlap !== b.overlap
+  );
+}
+
+function emptyDevices(): AudioDevices {
+  return { micOutputs: [], monitors: [], realMics: [] };
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }

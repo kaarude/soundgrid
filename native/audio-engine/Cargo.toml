@@ -1,0 +1,16 @@
+[package]
+name = "soundgrid-audio"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0"
+cpal = "0.15.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+symphonia = { version = "0.5.4", features = ["all"] }
+
+[profile.release]
+lto = "thin"
+strip = true

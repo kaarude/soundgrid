@@ -99,6 +99,8 @@ function renderSettingsBody(): void {
     settings: store.state.settings,
     devices: store.state.devices,
     devicesStatus: store.state.devicesStatus,
+    cableStatus: store.state.cableStatus,
+    cableInstalling: store.state.cableInstalling,
   });
   if (body.dataset.signature === signature) return;
   body.dataset.signature = signature;
@@ -168,7 +170,63 @@ function renderSettingsBody(): void {
     selectField("Theme", "theme", ["dark", "light", "system"], s.theme),
   );
 
-  body.replaceChildren(routing, behavior, system);
+  const driver = group("Driver");
+  driver.classList.add("drawer-group--driver");
+  driver.append(cableInstaller());
+
+  body.replaceChildren(routing, behavior, system, driver);
+}
+
+function cableInstaller(): HTMLElement {
+  const status = store.state.cableStatus;
+  const panel = document.createElement("div");
+  panel.className = `cable-setup${status?.installed ? " is-ready" : ""}`;
+
+  const copy = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = "VB-CABLE";
+  const description = document.createElement("p");
+  description.textContent =
+    status?.message ?? "Checking whether the virtual audio cable is installed…";
+  copy.append(title, description);
+
+  const actions = document.createElement("div");
+  actions.className = "cable-actions";
+  if (status?.supported && !status.installed) {
+    const install = document.createElement("button");
+    install.type = "button";
+    install.className = "settings-action settings-action--primary";
+    install.disabled = !status.canInstall || store.state.cableInstalling;
+    install.textContent = store.state.cableInstalling ? "Installing…" : "Install VB-CABLE";
+    install.addEventListener("click", () => void installCable());
+    actions.append(install);
+  }
+  const donate = document.createElement("button");
+  donate.type = "button";
+  donate.className = "settings-action";
+  donate.textContent = "VB-Audio donation page";
+  donate.addEventListener("click", () => void window.soundgrid.openCableDonation());
+  actions.append(donate);
+
+  const attribution = document.createElement("p");
+  attribution.className = "cable-attribution";
+  attribution.textContent =
+    "VB-CABLE is separate donationware by VB-Audio Software. All participation is welcome.";
+  panel.append(copy, actions, attribution);
+  return panel;
+}
+
+async function installCable(): Promise<void> {
+  store.update({ cableInstalling: true });
+  try {
+    const status = await window.soundgrid.installCable();
+    store.update({ cableStatus: status, cableInstalling: false });
+  } catch (error) {
+    store.update({
+      cableInstalling: false,
+      audioError: error instanceof Error ? error.message : "VB-CABLE installation failed.",
+    });
+  }
 }
 
 function group(title: string): HTMLElement {

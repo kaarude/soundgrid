@@ -15,6 +15,9 @@ export const IPC = {
   // Audio devices
   DEVICES_LIST: "devices:list",
   DEVICES_REFRESH: "devices:refresh",
+  CABLE_STATUS: "cable:status",
+  CABLE_INSTALL: "cable:install",
+  CABLE_DONATE: "cable:donate",
 
   // Audio transport (mic output bus)
   PLAY_BOTH: "audio:playBoth",
