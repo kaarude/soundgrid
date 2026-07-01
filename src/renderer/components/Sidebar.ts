@@ -31,9 +31,14 @@ export function Sidebar(): HTMLElement {
   search.id = "sg-search";
   search.placeholder = "Search sounds…";
   search.setAttribute("autocomplete", "off");
-  search.addEventListener("input", () =>
-    store.update({ filter: search.value.toLowerCase() }),
-  );
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  search.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(
+      () => store.update({ filter: search.value.trim().toLowerCase() }),
+      120,
+    );
+  });
   searchWrap.append(searchIcon, search);
   searchWrap.htmlFor = search.id;
 

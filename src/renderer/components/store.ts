@@ -27,6 +27,8 @@ export interface State {
   filter: string;
   activeLibraryView: "favorites" | "all";
   soundsCollapsed: boolean;
+  bulkSelecting: boolean;
+  selectedClipIds: string[];
   // live transport
   micPlaying: NowPlaying | null;
   monitorPlaying: NowPlaying | null;
@@ -76,6 +78,8 @@ export const store = new Store({
   filter: "",
   activeLibraryView: "all",
   soundsCollapsed: false,
+  bulkSelecting: false,
+  selectedClipIds: [],
   micPlaying: null,
   monitorPlaying: null,
   micMuted: false,

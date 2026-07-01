@@ -16,17 +16,28 @@ import {
 export function SoundCard(clip: SoundClip): HTMLElement {
   const card = document.createElement("article");
   card.className = "card";
+  card.classList.toggle("is-missing", Boolean(clip.missing));
   card.dataset.clipId = clip.id;
   card.tabIndex = 0;
   const routeLabel = clip.broadcast ? "mic and monitor" : "monitor only";
   card.setAttribute("aria-label", `${clip.name}. Fire to ${routeLabel}`);
   card.title = `Fire to ${routeLabel}`;
-  card.addEventListener("click", () => fireBoth(clip, card));
+  if (clip.missing) {
+    card.title =
+      "Audio file is missing. Remove this entry or restore the file.";
+    card.setAttribute("aria-disabled", "true");
+  }
+  card.addEventListener("click", () => {
+    if (store.state.bulkSelecting) {
+      toggleSelectedClip(clip.id);
+    } else if (!clip.missing) void fireBoth(clip, card);
+  });
   card.addEventListener("keydown", (event) => {
     if (event.target !== card) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    void fireBoth(clip, card);
+    if (store.state.bulkSelecting) toggleSelectedClip(clip.id);
+    else if (!clip.missing) void fireBoth(clip, card);
   });
 
   const top = document.createElement("div");
@@ -35,6 +46,19 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   name.className = "card-name";
   name.textContent = clip.name;
   top.append(name);
+  if (store.state.bulkSelecting) {
+    const selection = document.createElement("input");
+    selection.type = "checkbox";
+    selection.className = "card-selection";
+    selection.checked = store.state.selectedClipIds.includes(clip.id);
+    selection.setAttribute("aria-label", `Select ${clip.name}`);
+    selection.addEventListener("click", (event) => event.stopPropagation());
+    selection.addEventListener("change", () => {
+      toggleSelectedClip(clip.id, selection.checked);
+    });
+    top.prepend(selection);
+    card.classList.add("is-selecting");
+  }
 
   const favorite = document.createElement("button");
   favorite.type = "button";
@@ -68,6 +92,10 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   );
   both.textContent = clip.broadcast ? "Mic + monitor" : "Monitor only";
   metadata.append(both);
+  if (clip.missing) {
+    both.className = "route-badge route-badge--missing";
+    both.textContent = "File missing";
+  }
   if (clip.hotkey) {
     const hotkey = document.createElement("kbd");
     hotkey.className = "hotkey-badge";
@@ -84,6 +112,7 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   micBtn.className = "card-btn card-btn--mic";
   micBtn.title = "Play to mic (broadcast)";
   micBtn.disabled = !clip.broadcast;
+  if (clip.missing) micBtn.disabled = true;
   if (!clip.broadcast) micBtn.title = "Monitor-only clips cannot be broadcast";
   micBtn.append(icon.mic());
   const micLabel = document.createElement("span");
@@ -101,6 +130,7 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   prevBtn.type = "button";
   prevBtn.className = "card-btn card-btn--preview";
   prevBtn.title = "Preview on headphones only";
+  prevBtn.disabled = Boolean(clip.missing);
   prevBtn.append(icon.headphones());
   const prevLabel = document.createElement("span");
   prevLabel.textContent = "Preview";
@@ -145,6 +175,14 @@ export function SoundCard(clip: SoundClip): HTMLElement {
     ClipSettingsMenu(clip, card),
   );
   return card;
+}
+
+function toggleSelectedClip(id: string, force?: boolean): void {
+  const selected = new Set(store.state.selectedClipIds);
+  const shouldSelect = force ?? !selected.has(id);
+  if (shouldSelect) selected.add(id);
+  else selected.delete(id);
+  store.update({ selectedClipIds: [...selected] });
 }
 
 function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {

@@ -18,7 +18,18 @@ export function App(): HTMLElement {
   body.className = "body";
   body.append(Sidebar(), ClipGrid());
 
-  el.append(TopBar(), body, SettingsDrawer());
+  const status = document.createElement("div");
+  status.className = "system-alert";
+  status.hidden = true;
+  status.setAttribute("role", "alert");
+  const statusText = document.createElement("span");
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.textContent = "Dismiss";
+  dismiss.addEventListener("click", () => store.update({ audioError: null }));
+  status.append(statusText, dismiss);
+
+  el.append(TopBar(), status, body, SettingsDrawer());
   installFileDrop(el);
 
   // subscribe once; re-sync the pieces that changed
@@ -29,6 +40,7 @@ export function App(): HTMLElement {
     syncBusMeter("mic");
     syncBusMeter("monitor");
     syncSettingsDrawer();
+    syncSystemState(status, statusText);
   });
 
   // initial load
@@ -75,6 +87,7 @@ export function App(): HTMLElement {
       store.update({ audioError: event.message });
     }
   });
+  window.soundgrid.onLibraryChanged((clips) => store.update({ clips }));
   void boot();
   return el;
 }
@@ -130,9 +143,37 @@ async function boot(): Promise<void> {
     monitorVolume: settings.monitorVolume,
   });
 
+  applyTheme(settings.theme);
+
   // device enumeration: the main process can't list audio devices, so the
   // renderer queries the Web Audio / MediaDevices API and surfaces them.
-  await refreshDevices();
+  const devices = await refreshDevices();
+  if (devices && settings.autoSelectMic) {
+    const patch: Partial<typeof settings> = {};
+    if (!settings.micOutputDeviceId) {
+      patch.micOutputDeviceId =
+        devices.micOutputs.find((device) => /cable input/i.test(device.label))
+          ?.id ?? null;
+    }
+    if (!settings.monitorDeviceId) {
+      const eligibleMonitors = settings.headsetOnly
+        ? devices.monitors.filter((device) =>
+            /head(phone|set)|earbud|airpod/i.test(device.label),
+          )
+        : devices.monitors;
+      patch.monitorDeviceId =
+        eligibleMonitors.find((device) => !/cable/i.test(device.label))?.id ??
+        eligibleMonitors[0]?.id ??
+        null;
+    }
+    if (settings.passthrough && !settings.realMicDeviceId) {
+      patch.realMicDeviceId = devices.realMics[0]?.id ?? null;
+    }
+    if (Object.values(patch).some(Boolean)) {
+      const result = await window.soundgrid.setSettings(patch);
+      store.update({ settings: result.settings });
+    }
+  }
   try {
     store.update({ cableStatus: await window.soundgrid.getCableStatus() });
   } catch (error) {
@@ -140,7 +181,9 @@ async function boot(): Promise<void> {
   }
 }
 
-async function refreshDevices(): Promise<void> {
+async function refreshDevices(): Promise<
+  import("../../shared/types").AudioDevices | null
+> {
   try {
     const native = await window.soundgrid.listDevices();
     if (
@@ -149,7 +192,7 @@ async function refreshDevices(): Promise<void> {
       native.realMics.length
     ) {
       store.update({ devicesStatus: "ready", devices: native });
-      return;
+      return native;
     }
 
     // Browser fallback keeps UI development usable when the native sidecar
@@ -159,14 +202,16 @@ async function refreshDevices(): Promise<void> {
     const ins = list.filter((d) => d.kind === "audioinput");
     const label = (d: MediaDeviceInfo) =>
       d.label || `Device ${d.deviceId.slice(0, 6)}`;
+    const devices = {
+      micOutputs: outs.map((d) => ({ id: d.deviceId, label: label(d) })),
+      monitors: outs.map((d) => ({ id: d.deviceId, label: label(d) })),
+      realMics: ins.map((d) => ({ id: d.deviceId, label: label(d) })),
+    };
     store.update({
       devicesStatus: "ready",
-      devices: {
-        micOutputs: outs.map((d) => ({ id: d.deviceId, label: label(d) })),
-        monitors: outs.map((d) => ({ id: d.deviceId, label: label(d) })),
-        realMics: ins.map((d) => ({ id: d.deviceId, label: label(d) })),
-      },
+      devices,
     });
+    return devices;
   } catch (error) {
     store.update({
       devicesStatus:
@@ -176,6 +221,17 @@ async function refreshDevices(): Promise<void> {
     });
   }
   // labels are empty until permission: re-enumerate after a user gesture later.
+  return null;
+}
+
+function applyTheme(theme: "dark" | "light" | "system"): void {
+  document.documentElement.dataset.theme = theme;
+}
+
+function syncSystemState(alert: HTMLElement, text: HTMLElement): void {
+  applyTheme(store.state.settings.theme);
+  alert.hidden = !store.state.audioError;
+  text.textContent = store.state.audioError ?? "";
 }
 
 // Re-enumerate device labels once a mic permission gesture happens anywhere.
