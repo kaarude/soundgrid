@@ -1,0 +1,17 @@
+SOUNDGRID AND VB-CABLE NOTICE
+
+SoundGrid is open-source software distributed under the MIT License. The full
+license is installed with the application and available in the source
+repository.
+
+SoundGrid includes the unmodified VB-CABLE driver package by VB-Audio Software.
+VB-CABLE is separate donationware and is not covered by SoundGrid's MIT
+License. Its origin is https://www.vb-cable.com/ and all participation is
+welcome. You can support VB-Audio at:
+https://shop.vb-audio.com/en/win-apps/11-vb-cable.html
+
+Installing SoundGrid also installs the VB-CABLE virtual audio driver. Windows
+will ask you to approve that driver, and Windows must be restarted afterward.
+
+By continuing, you agree to the license terms included inside the original
+VB-CABLE package and SoundGrid's MIT License.

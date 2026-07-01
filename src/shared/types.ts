@@ -28,6 +28,27 @@ export interface AudioDevice {
   label: string;
 }
 
+export type AudioEngineEvent =
+  | { type: "meter"; mic: number; monitor: number }
+  | { type: "clipEnded"; bus: "mic" | "monitor"; clipId: string }
+  | {
+      type: "transport";
+      bus: "mic" | "monitor";
+      state: "playing" | "paused" | "stopped";
+      clipId?: string;
+      name?: string;
+    }
+  | { type: "mute"; bus: "mic" | "monitor"; muted: boolean }
+  | { type: "error"; message: string };
+
+export interface CableStatus {
+  supported: boolean;
+  installed: boolean;
+  canInstall: boolean;
+  rebootRequired: boolean;
+  message: string;
+}
+
 export interface Settings {
   micOutputDeviceId: string | null;
   monitorDeviceId: string | null;

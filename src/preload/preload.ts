@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "../shared/ipc.js";
-import { Settings, SoundClip, SoundClipPatch } from "../shared/types.js";
+import {
+  AudioDevices,
+  AudioEngineEvent,
+  CableStatus,
+  Settings,
+  SoundClip,
+  SoundClipPatch,
+} from "../shared/types.js";
 
 // ---------------------------------------------------------------------------
 // Preload bridge
@@ -21,8 +28,12 @@ export interface SoundGridApi {
   getSettings: () => Promise<Settings>;
   setSettings: (patch: Partial<Settings>) => Promise<Settings>;
 
-  // devices (from renderer, since Electron main can't enumerate them)
-  listDevices: () => Promise<unknown>;
+  // devices + native engine events
+  listDevices: () => Promise<AudioDevices>;
+  onAudioEvent: (handler: (event: AudioEngineEvent) => void) => () => void;
+  getCableStatus: () => Promise<CableStatus>;
+  installCable: () => Promise<CableStatus>;
+  openCableDonation: () => Promise<void>;
 
   // mic transport
   playBoth: (clipId: string) => Promise<void>;
@@ -63,6 +74,15 @@ contextBridge.exposeInMainWorld("soundgrid", {
     ipcRenderer.invoke(IPC.SETTINGS_SET, patch),
 
   listDevices: () => ipcRenderer.invoke(IPC.DEVICES_LIST),
+  onAudioEvent: (handler: (event: AudioEngineEvent) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: AudioEngineEvent) =>
+      handler(payload);
+    ipcRenderer.on(IPC.ON_STATE, listener);
+    return () => ipcRenderer.removeListener(IPC.ON_STATE, listener);
+  },
+  getCableStatus: () => ipcRenderer.invoke(IPC.CABLE_STATUS),
+  installCable: () => ipcRenderer.invoke(IPC.CABLE_INSTALL),
+  openCableDonation: () => ipcRenderer.invoke(IPC.CABLE_DONATE),
 
   playBoth: (clipId: string) => ipcRenderer.invoke(IPC.PLAY_BOTH, clipId),
   micPlay: (clipId: string) => ipcRenderer.invoke(IPC.MIC_PLAY, clipId),

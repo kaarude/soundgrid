@@ -96,32 +96,13 @@ export function BusMeter(cfg: BusConfig): HTMLElement {
 
   // ---- live meter animation ----
   let level = 0; // 0..1
-  let target = 0;
+  let peakLevel = 0;
   let raf = 0;
-  let lastTargetAt = 0;
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-  const playing = (): NowPlaying | null =>
-    cfg.bus === "mic" ? store.state.micPlaying : store.state.monitorPlaying;
-  const muted = (): boolean =>
-    cfg.bus === "mic" ? store.state.micMuted : store.state.monitorMuted;
-
   function tick() {
-    const now = performance.now();
-    const np = playing();
-    if (np && !np.paused && !muted()) {
-      if (now - lastTargetAt > 120 + Math.random() * 60) {
-        const base =
-          cfg.bus === "mic" ? store.state.micVolume : store.state.monitorVolume;
-        target = Math.min(
-          1,
-          Math.max(0.04, base * (0.45 + Math.random() * 0.45)),
-        );
-        lastTargetAt = now;
-      }
-    } else {
-      target = 0;
-    }
+    const target =
+      cfg.bus === "mic" ? store.state.micLevel : store.state.monitorLevel;
     if (reduce.matches) {
       level = target;
     } else {
@@ -129,9 +110,11 @@ export function BusMeter(cfg: BusConfig): HTMLElement {
       level += (target - level) * smoothing;
       if (target === 0 && level < 0.001) level = 0;
     }
+    peakLevel = Math.max(level, peakLevel * 0.985);
     const pct = Math.round(level * 100);
+    const peakPct = Math.round(peakLevel * 100);
     fill.style.height = `${pct}%`;
-    peak.style.bottom = `${Math.min(100, pct + 3)}%`;
+    peak.style.bottom = `${Math.min(100, peakPct)}%`;
     meter.setAttribute("aria-valuenow", String(pct));
     raf = requestAnimationFrame(tick);
   }

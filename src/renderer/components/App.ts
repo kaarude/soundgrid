@@ -30,6 +30,46 @@ export function App(): HTMLElement {
   });
 
   // initial load
+  window.soundgrid.onAudioEvent((event) => {
+    if (event.type === "meter") {
+      store.update({ micLevel: event.mic, monitorLevel: event.monitor });
+    } else if (event.type === "clipEnded") {
+      if (event.bus === "mic" && store.state.micPlaying?.clipId === event.clipId) {
+        store.update({ micPlaying: null });
+      } else if (
+        event.bus === "monitor" &&
+        store.state.monitorPlaying?.clipId === event.clipId
+      ) {
+        store.update({ monitorPlaying: null });
+      }
+    } else if (event.type === "transport") {
+      const key = event.bus === "mic" ? "micPlaying" : "monitorPlaying";
+      const current = store.state[key];
+      store.update({
+        [key]:
+          event.state === "stopped"
+            ? null
+            : event.clipId && event.name
+              ? {
+                  clipId: event.clipId,
+                  name: event.name,
+                  paused: event.state === "paused",
+                }
+              : current
+                ? { ...current, paused: event.state === "paused" }
+                : null,
+      });
+    } else if (event.type === "mute") {
+      store.update(
+        event.bus === "mic"
+          ? { micMuted: event.muted }
+          : { monitorMuted: event.muted },
+      );
+    } else if (event.type === "error") {
+      console.error("Audio engine:", event.message);
+      store.update({ audioError: event.message });
+    }
+  });
   void boot();
   return el;
 }
@@ -49,10 +89,23 @@ async function boot(): Promise<void> {
   // device enumeration: the main process can't list audio devices, so the
   // renderer queries the Web Audio / MediaDevices API and surfaces them.
   await refreshDevices();
+  try {
+    store.update({ cableStatus: await window.soundgrid.getCableStatus() });
+  } catch (error) {
+    console.error("Could not check VB-CABLE:", error);
+  }
 }
 
 async function refreshDevices(): Promise<void> {
   try {
+    const native = await window.soundgrid.listDevices();
+    if (native.micOutputs.length || native.monitors.length || native.realMics.length) {
+      store.update({ devicesStatus: "ready", devices: native });
+      return;
+    }
+
+    // Browser fallback keeps UI development usable when the native sidecar
+    // has not been compiled for the current platform.
     const list = await navigator.mediaDevices.enumerateDevices();
     const outs = list.filter((d) => d.kind === "audiooutput");
     const ins = list.filter((d) => d.kind === "audioinput");

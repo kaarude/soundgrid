@@ -1,4 +1,5 @@
-import { AudioDevices, AudioDevice } from "../shared/types.js";
+import { AudioDevices } from "../shared/types.js";
+import { AudioEngine } from "./audio-engine.js";
 
 // ---------------------------------------------------------------------------
 // DeviceManager
@@ -20,15 +21,9 @@ import { AudioDevices, AudioDevice } from "../shared/types.js";
 // ---------------------------------------------------------------------------
 
 export class DeviceManager {
-  list(): AudioDevices {
-    // Placeholder: in production, query via a native helper.
-    // Electron does not expose audio device enumeration in the main process,
-    // so the renderer queries `navigator.mediaDevices.enumerateDevices()`
-    // and pushes the result back through the preload bridge.
-    return {
-      micOutputs: [] as AudioDevice[],
-      monitors: [] as AudioDevice[],
-      realMics: [] as AudioDevice[],
-    };
+  constructor(private readonly audio: AudioEngine) {}
+
+  list(): Promise<AudioDevices> {
+    return this.audio.listDevices();
   }
 }

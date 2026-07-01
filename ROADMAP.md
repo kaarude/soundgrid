@@ -2,7 +2,7 @@
 
 What's left to ship, grouped by phase. Each item is a **feature/function** with a description and a goal — no implementation detail or code. Checkboxes track whether a phase is started; they are not individual tickets.
 
-**Current status (already done):** Electron + TypeScript + Vite shell; main process (window, tray, IPC, library/settings stores, hotkey manager, stubbed audio engine + device manager); preload bridge; the full "Cue Rack" renderer UI (top bar, sidebar, clip grid, right console with two live bus meters, settings drawer, guided first-run card); reactive store; simulated metering; design system (`PRODUCT.md`, `DESIGN.md`, sidecar); browser-QA'd with clean types/build and zero console errors.
+**Current status (already done):** Electron + TypeScript + Vite shell; main process (window, tray, IPC, library/settings stores, hotkey manager); Rust native audio sidecar with CPAL/WASAPI device I/O, Symphonia decoding, independent mic/monitor buses, real-mic passthrough, overlap modes, and real peak metering; native device enumeration; preload bridge; the full "Cue Rack" renderer UI; persisted routing; verified VB-CABLE payload download and guided installer; Windows NSIS packaging and release CI.
 
 **Locked decisions driving this roadmap:**
 
@@ -18,32 +18,32 @@ What's left to ship, grouped by phase. Each item is a **feature/function** with 
 
 The app is a real UI over a stubbed audio engine. Phase 0 replaces the stub with a working Windows audio pipeline so firing a clip genuinely reaches other apps as mic input.
 
-### 0.1 Select and license a redistributable virtual audio driver
+### 0.1 Select and license a redistributable virtual audio driver ✅
 
 - **Description:** Evaluate candidate virtual audio cables we can legally bundle (VB-CABLE redistribution license, or a truly open-source WDM/APO virtual device). Confirm licensing, signing, and install behavior on Windows 10/11.
 - **Goal:** A single, redistributable virtual device we can ship inside our installer without legal risk, with a documented install/configuration flow.
 
-### 0.2 Native Windows audio engine (WASAPI)
+### 0.2 Native Windows audio engine (WASAPI) ✅ _(hardware validation pending)_
 
 - **Description:** Replace the stubbed `AudioEngine` with a real native audio backend on Windows. The **mic bus** renders decoded PCM to the selected "Mic output device" (the virtual cable) via WASAPI (shared or low-latency exclusive). The **monitor bus** renders independently to the selected headphone device.
 - **Goal:** A clip fired via "Mic" is heard by other apps as mic input; a clip fired via "Preview" is heard only on the user's headphones. Two buses, two destinations, fully decoupled — the core product promise working for real.
 
-### 0.3 Real microphone capture + passthrough mixing
+### 0.3 Real microphone capture + passthrough mixing ✅ _(hardware validation pending)_
 
 - **Description:** Capture the user's physical microphone and mix it into the mic bus so their real voice is still heard alongside clips. Honor the **Passthrough real mic** toggle and the **Real mic (passthrough)** device selection.
 - **Goal:** With passthrough on, other apps hear both the user's voice and fired clips; with it off, other apps hear only clips. The mix is clean (no double-buffering artifacts, no echo).
 
-### 0.4 Real metering
+### 0.4 Real metering ✅
 
 - **Description:** Drive the two vertical console meters from actual audio levels (RMS/peak) of the mic bus and monitor bus, instead of the current simulated random-walk. Include a peak-hold tick.
 - **Goal:** The meters reflect what is genuinely going to the mic and to the headphones — trustworthy at a glance, not decorative.
 
-### 0.5 Native device enumeration
+### 0.5 Native device enumeration ✅
 
 - **Description:** Enumerate audio devices in the main process via WASAPI (playback devices, recording devices) instead of relying on the renderer's `navigator.mediaDevices`. Group them into mic-outputs (the cable), monitors (headphones), and real mics, with stable ids across sessions.
 - **Goal:** The Settings routing dropdowns list real devices with correct labels, persist reliably, and survive device plug/unplug.
 
-### 0.6 Auto-configure the bundled cable on first run
+### 0.6 Auto-configure the bundled cable on first run ✅ _(Windows validation pending)_
 
 - **Description:** On first launch, detect whether the bundled virtual cable is installed and set as the system; if not, install/configure it from the bundled payload, then pre-select it as the **Mic output device** and default the monitor to the user's default playback device.
 - **Goal:** A first-run user reaches "other apps hear my clips" with zero manual driver setup — the smoother UX we chose.
@@ -241,7 +241,7 @@ Kept light until Windows is shipped and proven.
 
 ## Decision gates (open questions to resolve)
 
-- **G1 — Which redistributable virtual cable do we bundle?** (gates Phase 0). Need a driver we can legally ship in an open-source installer. Candidates and their licenses must be checked; if none are cleanly redistributable, we revisit the "build our own driver" option.
+- **G1 — Which redistributable virtual cable do we bundle? RESOLVED:** standard VB-CABLE 4.5, distributed unchanged with the required VB-Audio donationware attribution and donation link. Written confirmation from VB-Audio is still recommended before a broad public release.
 - **G2 — Minimum Windows version?** Windows 10 vs 11 only affects WASAPI features and signing paths; pick a floor.
 - **G3 — Telemetry stance?** None vs opt-in (see C3).
 - **G4 — Voice changer DSP approach?** When Phase 4 starts, decide whether to use an existing real-time DSP library, a Web Audio worklet pipeline, or a native Rust/C++ DSP chain on the mic bus. This is a Phase 4 decision, recorded here so it's not forgotten.

@@ -11,18 +11,22 @@ import {
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { IPC } from "../shared/ipc.js";
-import { Settings, SoundClip, SoundClipPatch } from "../shared/types.js";
+import {
+  AudioEngineEvent,
+  Settings,
+  SoundClip,
+  SoundClipPatch,
+} from "../shared/types.js";
 import { LibraryStore } from "./library.js";
 import { SettingsStore } from "./settings.js";
 import { AudioEngine } from "./audio-engine.js";
 import { DeviceManager } from "./devices.js";
 import { HotkeyManager } from "./hotkeys.js";
+import { DriverManager } from "./driver-manager.js";
 
-// Windows driver note: real "mic injection" requires a virtual audio device
-// (e.g. VB-CABLE). SoundGrid cannot ship a signed kernel driver as an
-// open-source project, so on first run we detect a virtual cable and guide
-// the user to install one. The audio engine routes the mic bus to whatever
-// playback device the user selects as their "mic output".
+// The native sidecar owns decoding, WASAPI/CoreAudio streams, mixing and
+// metering. On Windows, the mic bus is rendered to VB-CABLE's playback
+// endpoint; voice applications capture the matching recording endpoint.
 
 class SoundGrid {
   private win?: BrowserWindow;
@@ -30,7 +34,8 @@ class SoundGrid {
   private library = new LibraryStore();
   private settings = new SettingsStore();
   private audio = new AudioEngine();
-  private devices = new DeviceManager();
+  private devices = new DeviceManager(this.audio);
+  private driver = new DriverManager(this.audio);
   private hotkeys = new HotkeyManager();
 
   async start() {
@@ -43,6 +48,9 @@ class SoundGrid {
     await this.library.init(path.join(userDataDir, "library.json"), soundsDir);
     await this.settings.init(path.join(userDataDir, "settings.json"));
 
+    this.audio.onEvent((event) => this.onAudioEvent(event));
+    await this.audio.start(this.settings.get());
+
     this.registerIpc();
     this.registerPersistedHotkeys();
     this.createWindow();
@@ -50,6 +58,10 @@ class SoundGrid {
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) this.createWindow();
+    });
+    app.on("before-quit", () => {
+      this.quitting = true;
+      this.audio.shutdown();
     });
   }
 
@@ -146,6 +158,8 @@ class SoundGrid {
     ipcMain.handle(IPC.SETTINGS_GET, () => this.settings.get());
     ipcMain.handle(IPC.SETTINGS_SET, async (_e, patch: Partial<Settings>) => {
       const next = await this.settings.set(patch);
+      this.audio.applySettings(next);
+      app.setLoginItemSettings({ openAtLogin: next.runOnStartup });
       this.registerPersistedHotkeys();
       return next;
     });
@@ -153,6 +167,9 @@ class SoundGrid {
     // ---- Devices ----
     ipcMain.handle(IPC.DEVICES_LIST, () => this.devices.list());
     ipcMain.handle(IPC.DEVICES_REFRESH, () => this.devices.list());
+    ipcMain.handle(IPC.CABLE_STATUS, () => this.driver.status());
+    ipcMain.handle(IPC.CABLE_INSTALL, () => this.driver.install());
+    ipcMain.handle(IPC.CABLE_DONATE, () => this.driver.openDonationPage());
 
     // ---- Mic transport ----
     ipcMain.handle(IPC.PLAY_BOTH, (_e, clipId: string) =>
@@ -255,6 +272,11 @@ class SoundGrid {
       if (id === "__mic_mute__") return this.audio.toggleMicMute();
       return this.audio.playBoth(this.library.byId(id));
     });
+  }
+
+  private onAudioEvent(event: AudioEngineEvent): void {
+    this.win?.webContents.send(IPC.ON_STATE, event);
+    if (event.type === "error") console.error("Audio engine:", event.message);
   }
 }
 

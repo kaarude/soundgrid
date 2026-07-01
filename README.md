@@ -66,7 +66,9 @@ Import: **MP3, WAV, OGG/OGA, FLAC, M4A/AAC, OPUS, WebM-audio**.
 
 ## Tech stack
 
-- **Electron 33** — cross-platform desktop shell
+- **Electron 33** — desktop shell
+- **Rust + CPAL/WASAPI** — native device I/O, mixing, passthrough, and meters
+- **Symphonia** — native clip decoding
 - **TypeScript** — end-to-end, strict
 - **Vite 6** — renderer dev server + build
 - **electron-builder** — Windows NSIS + portable packaging
@@ -130,23 +132,28 @@ npm install
 npm run dist     # produces NSIS installer + portable exe in release/
 ```
 
+The distribution build downloads the original VB-CABLE 4.5 package from
+VB-Audio and verifies its pinned SHA-256 before bundling it unchanged. The
+SoundGrid installer launches VB-CABLE's supported silent-install mode; Windows
+still displays its required driver-consent prompt, then requires a restart.
+Settings retains a repair/retry action. VB-CABLE is separate donationware and
+is not covered by SoundGrid's MIT license.
+
 The GitHub Actions release workflow also builds the installer on a clean
 Windows machine. Run **Build Windows installer** from the repository's Actions
 tab to get a downloadable artifact, or push a tag such as `v0.1.0` to attach
 the `.exe` directly to a GitHub Release.
 
-> macOS note: macOS has no API to inject audio into a real mic, so on Mac the
-> mic bus falls back to a normal output device — enough to develop and test the
-> UI/transport. The Windows production build uses a native WASAPI helper
-> (planned) to render the mic bus straight to the chosen virtual device.
+> macOS note: the native engine supports normal CoreAudio devices for
+> development, but the bundled virtual microphone installation is Windows-only.
 
 ## Roadmap
 
-- [ ] Native WASAPI mic-bus routing on Windows
-- [ ] Real-mic passthrough / mixing into the mic bus
+- [x] Native WASAPI mic/monitor routing on Windows
+- [x] Real-mic passthrough / mixing into the mic bus
 - [ ] Per-clip hotkey binding UI
 - [ ] Library import + drag-and-drop
-- [ ] Persisted device selection
+- [x] Persisted device selection
 - [x] GitHub Actions release pipeline (NSIS installer)
 
 ## License

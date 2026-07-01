@@ -12,20 +12,38 @@
       { "target": "nsis", "arch": ["x64"] },
       { "target": "portable", "arch": ["x64"] }
     ],
-    "artifactName": "SoundGrid-Portable-${version}-${arch}.${ext}"
+    "artifactName": "SoundGrid-Portable-${version}-${arch}.${ext}",
+    "extraResources": [
+      {
+        "from": "native/audio-engine/target/release/soundgrid-audio.exe",
+        "to": "native/soundgrid-audio.exe"
+      },
+      {
+        "from": "vendor/vb-cable/VBCABLE_Driver_Pack45.zip",
+        "to": "vendor/VBCABLE_Driver_Pack45.zip"
+      }
+    ]
   },
   "nsis": {
     "artifactName": "SoundGrid-Setup-${version}-${arch}.${ext}",
     "oneClick": false,
-    "perMachine": false,
+    "perMachine": true,
     "allowToChangeInstallationDirectory": true,
+    "include": "build/installer.nsh",
+    "license": "build/installer-license.txt",
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "shortcutName": "SoundGrid"
   },
   "mac": {
     "target": ["dmg"],
-    "category": "public.app-category.music"
+    "category": "public.app-category.music",
+    "extraResources": [
+      {
+        "from": "native/audio-engine/target/release/soundgrid-audio",
+        "to": "native/soundgrid-audio"
+      }
+    ]
   },
   "linux": {
     "target": ["AppImage"],
