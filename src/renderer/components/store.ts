@@ -25,7 +25,8 @@ export interface State {
   };
   devicesStatus: "loading" | "ready" | "permission-needed" | "error";
   filter: string;
-  activeCategory: string;
+  activeLibraryView: "favorites" | "all";
+  soundsCollapsed: boolean;
   // live transport
   micPlaying: NowPlaying | null;
   monitorPlaying: NowPlaying | null;
@@ -73,7 +74,8 @@ export const store = new Store({
   devices: { micOutputs: [], monitors: [], realMics: [] },
   devicesStatus: "loading",
   filter: "",
-  activeCategory: "All",
+  activeLibraryView: "all",
+  soundsCollapsed: false,
   micPlaying: null,
   monitorPlaying: null,
   micMuted: false,

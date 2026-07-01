@@ -118,6 +118,10 @@ export const icon = {
       '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
     ),
   chevron: () => svg('<polyline points="9 6 15 12 9 18"/>'),
+  star: () =>
+    svg(
+      '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3z"/>',
+    ),
   bolt: () =>
     svg(
       '<polygon points="13 2 4 14 11 14 10 22 20 9 13 9 13 2" fill="currentColor" stroke="none"/>',

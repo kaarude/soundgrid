@@ -10,10 +10,7 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   const card = document.createElement("article");
   card.className = "card";
   card.tabIndex = 0;
-  card.setAttribute(
-    "aria-label",
-    `${clip.name} — ${clip.category}. Fire to mic and monitor`,
-  );
+  card.setAttribute("aria-label", `${clip.name}. Fire to mic and monitor`);
   card.title = "Fire to mic and monitor";
   card.addEventListener("click", () => fireBoth(clip, card));
   card.addEventListener("keydown", (event) => {
@@ -28,10 +25,28 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   const name = document.createElement("div");
   name.className = "card-name";
   name.textContent = clip.name;
-  const cat = document.createElement("div");
-  cat.className = "card-cat";
-  cat.textContent = clip.category;
-  top.append(name, cat);
+  top.append(name);
+
+  const favorite = document.createElement("button");
+  favorite.type = "button";
+  favorite.className = "card-favorite" + (clip.favorite ? " is-favorite" : "");
+  favorite.title = clip.favorite ? "Remove from favorites" : "Add to favorites";
+  favorite.setAttribute("aria-label", favorite.title);
+  favorite.setAttribute("aria-pressed", String(clip.favorite));
+  favorite.append(icon.star());
+  favorite.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const next = !clip.favorite;
+    await window.soundgrid.updateClip(clip.id, { favorite: next });
+    const clips = store.state.clips.map((item) =>
+      item.id === clip.id ? { ...item, favorite: next } : item,
+    );
+    const hasFavorites = clips.some((item) => item.favorite);
+    store.update({
+      clips,
+      activeLibraryView: hasFavorites ? store.state.activeLibraryView : "all",
+    });
+  });
 
   const metadata = document.createElement("div");
   metadata.className = "card-meta";
@@ -105,7 +120,14 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   });
 
   actions.append(micBtn, prevBtn);
-  card.append(top, metadata, actions, menuBtn, ClipSettingsMenu(clip, card));
+  card.append(
+    top,
+    metadata,
+    actions,
+    favorite,
+    menuBtn,
+    ClipSettingsMenu(clip, card),
+  );
   return card;
 }
 
@@ -115,7 +137,6 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
   form.addEventListener("click", (event) => event.stopPropagation());
 
   const name = textField("Name", clip.name);
-  const category = textField("Category", clip.category);
   const hotkey = textField("Hotkey", clip.hotkey ?? "");
   hotkey.input.placeholder = "Click, then press keys";
   hotkey.input.readOnly = true;
@@ -191,7 +212,6 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
 
     const patch: SoundClipPatch = {
       name: name.input.value.trim() || clip.name,
-      category: category.input.value.trim() || "Uncategorized",
       hotkey: normalizedHotkey || undefined,
       volume: Number(volumeInput.value) / 100,
       loop: loopInput.checked,
@@ -205,15 +225,7 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
     closeMenu(card);
   });
 
-  form.append(
-    name.label,
-    category.label,
-    hotkey.label,
-    volume,
-    loop,
-    error,
-    footer,
-  );
+  form.append(name.label, hotkey.label, volume, loop, error, footer);
   return form;
 }
 

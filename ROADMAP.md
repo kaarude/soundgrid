@@ -56,7 +56,7 @@ The UI is present but several controls are not yet wired to real behavior. Phase
 
 ### 1.1 Per-clip settings
 
-- **Description:** Editable per clip: rename, category, hotkey binding, per-clip volume, loop toggle, and a broadcast vs monitor-only flag. Expose these inline on a clip (an "edit" affordance) and persist to the library index.
+- **Description:** Editable per clip: rename, favorite, hotkey binding, per-clip volume, loop toggle, and a broadcast vs monitor-only flag. Expose these inline on a clip (an "edit" affordance) and persist to the library index.
 - **Goal:** Each clip is fully configurable without touching global settings; monitor-only clips can be previewed without ever reaching the mic.
 
 ### 1.2 Global hotkey system
@@ -102,7 +102,7 @@ Take a working app to a defensible, studio-grade product.
 
 ### 2.3 Performance for large libraries
 
-- **Description:** Virtualize the clip grid so 1000+ clips scroll smoothly; add a search index (name + category) for instant filtering; debounce search.
+- **Description:** Virtualize the clip grid so 1000+ clips scroll smoothly; add a name search index for instant filtering; debounce search.
 - **Goal:** No jank with large libraries; search is instant.
 
 ### 2.4 Error & edge states

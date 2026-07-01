@@ -6,7 +6,7 @@ export interface SoundClip {
   id: string;
   name: string;
   filePath: string; // absolute path inside the library folder
-  category: string;
+  favorite: boolean;
   hotkey?: string;
   volume: number; // 0..1 per-clip gain
   loop: boolean;
@@ -14,7 +14,10 @@ export interface SoundClip {
 }
 
 export type SoundClipPatch = Partial<
-  Pick<SoundClip, "name" | "category" | "hotkey" | "volume" | "loop" | "broadcast">
+  Pick<
+    SoundClip,
+    "name" | "favorite" | "hotkey" | "volume" | "loop" | "broadcast"
+  >
 >;
 
 export interface AudioDevices {
