@@ -37,6 +37,16 @@ export interface SoundClipUpdateResult {
   hotkeys: HotkeyRegistrationResult;
 }
 
+export interface ImportSkippedFile {
+  filePath: string;
+  reason: "unsupported" | "empty" | "duplicate";
+}
+
+export interface LibraryImportResult {
+  added: SoundClip[];
+  skipped: ImportSkippedFile[];
+}
+
 export interface SettingsUpdateResult {
   settings: Settings;
   hotkeys: HotkeyRegistrationResult;
@@ -97,7 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   micOutputDeviceId: null,
   monitorDeviceId: null,
   realMicDeviceId: null,
-  passthrough: true,
+  passthrough: false,
   masterMicVolume: 0.9,
   monitorVolume: 0.8,
   overlap: "stop",

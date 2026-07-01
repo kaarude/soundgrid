@@ -42,9 +42,36 @@ describe("LibraryStore", () => {
 
     const store = new LibraryStore();
     await store.init(db, sounds);
-    const [clip] = await store.importFiles([source]);
+    const { added, skipped } = await store.importFiles([source]);
+    const [clip] = added;
 
     expect(clip.name).toBe("My.Sound Effect.WAV");
+    expect(skipped).toEqual([]);
+  });
+
+  it("reports unsupported, empty, and duplicate files during import", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
+    roots.push(root);
+    const sounds = path.join(root, "sounds");
+    const db = path.join(root, "library.json");
+    const wav = path.join(root, "valid.wav");
+    const empty = path.join(root, "empty.mp3");
+    const unsupported = path.join(root, "notes.txt");
+    await mkdir(sounds);
+    await writeFile(wav, "audio fixture");
+    await writeFile(empty, "");
+    await writeFile(unsupported, "not audio");
+
+    const store = new LibraryStore();
+    await store.init(db, sounds);
+    const result = await store.importFiles([wav, wav, empty, unsupported]);
+
+    expect(result.added).toHaveLength(1);
+    expect(result.skipped).toEqual([
+      { filePath: wav, reason: "duplicate" },
+      { filePath: empty, reason: "empty" },
+      { filePath: unsupported, reason: "unsupported" },
+    ]);
   });
 
   it("normalizes legacy clips and persists unrelated updates without losing hotkeys", async () => {

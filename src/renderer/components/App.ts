@@ -5,6 +5,8 @@ import { SettingsDrawer, syncSettingsDrawer } from "./SettingsDrawer";
 import { TopBar, syncTopBar } from "./TopBar";
 import { syncBusMeter } from "./BusMeter";
 import { importDroppedAudioFiles } from "./library-actions";
+import { reconcileAudioRouting } from "../../shared/routing";
+import { AudioDevices, Settings } from "../../shared/types";
 
 // SoundGrid main window — "The Cue Rack":
 //   top bus transport · collapsible cue rail · center clip grid.
@@ -148,32 +150,7 @@ async function boot(): Promise<void> {
   // device enumeration: the main process can't list audio devices, so the
   // renderer queries the Web Audio / MediaDevices API and surfaces them.
   const devices = await refreshDevices();
-  if (devices && settings.autoSelectMic) {
-    const patch: Partial<typeof settings> = {};
-    if (!settings.micOutputDeviceId) {
-      patch.micOutputDeviceId =
-        devices.micOutputs.find((device) => /cable input/i.test(device.label))
-          ?.id ?? null;
-    }
-    if (!settings.monitorDeviceId) {
-      const eligibleMonitors = settings.headsetOnly
-        ? devices.monitors.filter((device) =>
-            /head(phone|set)|earbud|airpod/i.test(device.label),
-          )
-        : devices.monitors;
-      patch.monitorDeviceId =
-        eligibleMonitors.find((device) => !/cable/i.test(device.label))?.id ??
-        eligibleMonitors[0]?.id ??
-        null;
-    }
-    if (settings.passthrough && !settings.realMicDeviceId) {
-      patch.realMicDeviceId = devices.realMics[0]?.id ?? null;
-    }
-    if (Object.values(patch).some(Boolean)) {
-      const result = await window.soundgrid.setSettings(patch);
-      store.update({ settings: result.settings });
-    }
-  }
+  if (devices) await syncRoutingWithDevices(devices, settings);
   try {
     store.update({ cableStatus: await window.soundgrid.getCableStatus() });
   } catch (error) {
@@ -181,9 +158,7 @@ async function boot(): Promise<void> {
   }
 }
 
-async function refreshDevices(): Promise<
-  import("../../shared/types").AudioDevices | null
-> {
+async function refreshDevices(): Promise<AudioDevices | null> {
   try {
     const native = await window.soundgrid.listDevices();
     if (
@@ -224,6 +199,16 @@ async function refreshDevices(): Promise<
   return null;
 }
 
+async function syncRoutingWithDevices(
+  devices: AudioDevices,
+  settings: Settings,
+): Promise<void> {
+  const patch = reconcileAudioRouting(settings, devices);
+  if (!Object.keys(patch).length) return;
+  const result = await window.soundgrid.setSettings(patch);
+  store.update({ settings: result.settings });
+}
+
 function applyTheme(theme: "dark" | "light" | "system"): void {
   document.documentElement.dataset.theme = theme;
 }
@@ -235,8 +220,18 @@ function syncSystemState(alert: HTMLElement, text: HTMLElement): void {
 }
 
 // Re-enumerate device labels once a mic permission gesture happens anywhere.
-navigator.mediaDevices.addEventListener?.(
+navigator.mediaDevices?.addEventListener?.(
   "devicechange",
-  () => void refreshDevices(),
+  () =>
+    void refreshDevices().then((devices) => {
+      if (devices) void syncRoutingWithDevices(devices, store.state.settings);
+    }),
 );
-document.addEventListener("click", () => void refreshDevices(), { once: true });
+document.addEventListener(
+  "click",
+  () =>
+    void refreshDevices().then((devices) => {
+      if (devices) void syncRoutingWithDevices(devices, store.state.settings);
+    }),
+  { once: true },
+);

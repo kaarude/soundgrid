@@ -10,14 +10,29 @@ use symphonia::core::{
     probe::Hint,
 };
 
+#[derive(Debug)]
 pub struct DecodedAudio {
     pub samples: Vec<f32>,
     pub channels: usize,
     pub sample_rate: u32,
 }
 
+const MAX_AUDIO_FILE_BYTES: u64 = 100 * 1024 * 1024;
+const MAX_DECODED_SAMPLES: usize = 48_000 * 2 * 60 * 10;
+const MAX_CHANNELS: usize = 8;
+const MAX_SAMPLE_RATE: u32 = 192_000;
+
 pub fn decode(path: &str) -> Result<DecodedAudio> {
     let file = File::open(path).with_context(|| format!("cannot open audio file: {path}"))?;
+    let size = file
+        .metadata()
+        .with_context(|| format!("cannot inspect audio file: {path}"))?
+        .len();
+    anyhow::ensure!(
+        size <= MAX_AUDIO_FILE_BYTES,
+        "audio file is larger than the {} MiB limit",
+        MAX_AUDIO_FILE_BYTES / 1024 / 1024
+    );
     let source = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
     if let Some(extension) = Path::new(path).extension().and_then(|value| value.to_str()) {
@@ -46,6 +61,19 @@ pub fn decode(path: &str) -> Result<DecodedAudio> {
         .channels
         .context("audio channel layout is missing")?
         .count();
+    anyhow::ensure!(
+        channels > 0 && channels <= MAX_CHANNELS,
+        "audio channel count exceeds the {MAX_CHANNELS} channel limit"
+    );
+    anyhow::ensure!(
+        sample_rate <= MAX_SAMPLE_RATE,
+        "audio sample rate exceeds the {MAX_SAMPLE_RATE} Hz limit"
+    );
+    let max_decoded_samples = MAX_DECODED_SAMPLES.min(
+        sample_rate
+            .saturating_mul(channels as u32)
+            .saturating_mul(60 * 10) as usize,
+    );
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
         .context("unsupported audio codec")?;
@@ -69,7 +97,7 @@ pub fn decode(path: &str) -> Result<DecodedAudio> {
             Err(SymphoniaError::DecodeError(_)) => continue,
             Err(error) => return Err(error).context("failed decoding audio packet"),
         };
-        append_interleaved(&decoded, &mut samples);
+        append_interleaved(&decoded, &mut samples, max_decoded_samples)?;
     }
 
     anyhow::ensure!(!samples.is_empty(), "audio file decoded to no samples");
@@ -95,9 +123,20 @@ fn normalize_peak(samples: &mut [f32]) {
     }
 }
 
-fn append_interleaved(buffer: &AudioBufferRef<'_>, output: &mut Vec<f32>) {
+fn append_interleaved(
+    buffer: &AudioBufferRef<'_>,
+    output: &mut Vec<f32>,
+    max_samples: usize,
+) -> Result<()> {
     let channels = buffer.spec().channels.count();
     let frames = buffer.frames();
+    let incoming = frames
+        .checked_mul(channels)
+        .context("decoded audio sample count overflowed")?;
+    anyhow::ensure!(
+        output.len().saturating_add(incoming) <= max_samples,
+        "audio clip exceeds the decoded sample limit"
+    );
     match buffer {
         AudioBufferRef::F32(data) => {
             for frame in 0..frames {
@@ -112,14 +151,20 @@ fn append_interleaved(buffer: &AudioBufferRef<'_>, output: &mut Vec<f32>) {
                 *buffer.spec(),
             );
             converted.copy_interleaved_ref(buffer.clone());
-            output.extend_from_slice(converted.samples());
+            let converted_samples = converted.samples();
+            anyhow::ensure!(
+                output.len().saturating_add(converted_samples.len()) <= max_samples,
+                "audio clip exceeds the decoded sample limit"
+            );
+            output.extend_from_slice(converted_samples);
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::decode;
+    use super::{decode, MAX_AUDIO_FILE_BYTES};
     use std::{fs, time::SystemTime};
 
     #[test]
@@ -159,5 +204,21 @@ mod tests {
         assert!(decoded.samples[1] > 0.94);
         assert!(decoded.samples[2] <= -0.94);
         assert!(decoded.samples.iter().all(|sample| sample.abs() <= 0.951));
+    }
+
+    #[test]
+    fn rejects_oversized_audio_before_decode() {
+        let mut path = std::env::temp_dir();
+        let unique = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        path.push(format!("soundgrid-decoder-oversized-{unique}.wav"));
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(MAX_AUDIO_FILE_BYTES + 1).unwrap();
+
+        let error = decode(path.to_str().unwrap()).unwrap_err();
+        fs::remove_file(path).unwrap();
+        assert!(error.to_string().contains("larger than"));
     }
 }

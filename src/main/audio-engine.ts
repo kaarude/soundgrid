@@ -280,7 +280,7 @@ function findNativeExecutable(): string | undefined {
   const filename =
     process.platform === "win32" ? "soundgrid-audio.exe" : "soundgrid-audio";
   const candidates = [
-    process.env.SOUNDGRID_AUDIO_ENGINE,
+    app.isPackaged ? undefined : process.env.SOUNDGRID_AUDIO_ENGINE,
     app.isPackaged
       ? path.join(process.resourcesPath, "native", filename)
       : undefined,

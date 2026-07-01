@@ -64,7 +64,7 @@ The UI is present but several controls are not yet wired to real behavior. Phase
 - **Description:** Bind a system-wide hotkey per clip (fires on the mic bus), plus global **Stop all** and **mic-mute** hotkeys. Add conflict detection against OS/other-app shortcuts, a key-capture UI in per-clip settings, and an optional **hold-to-play** mode. Register/unregister on settings change.
 - **Goal:** The user fires any clip from any app without focusing SoundGrid — the "eyes-off-the-app" principle made real.
 
-### 1.3 Overlap behavior
+### 1.3 Overlap behavior ✅
 
 - **Description:** Implement the three overlap modes the settings already expose: **stop** (new clip cuts the current one), **overlap** (layer), and **queue** (wait). Applied per bus.
 - **Goal:** Predictable multi-clip behavior that matches the selected mode, with no clicks/pops on transitions.
@@ -74,12 +74,12 @@ The UI is present but several controls are not yet wired to real behavior. Phase
 - **Description:** Drag-and-drop import into the grid; re-import/refresh; bulk select and delete/recategorize; watch the sounds folder for external additions; detect and surface missing/moved source files.
 - **Goal:** Managing 5–500 clips is fast and forgiving; broken file references are shown clearly, not silently dropped.
 
-### 1.5 Settings enforcement
+### 1.5 Settings enforcement ✅
 
 - **Description:** Make every settings toggle actually do what it says: **Headset-only mode** (never route monitor to speakers), **Mic-only mode** (silence local monitor while broadcasting), **Auto-select mic** (follow system default), **Theme** (light/system actually implemented, not just dark), **Run on startup** (real OS autostart registration).
 - **Goal:** No placebo toggles — every control in Settings changes real behavior.
 
-### 1.6 Tray actions
+### 1.6 Tray actions ✅
 
 - **Description:** Expand the tray menu to include Stop all, mic-mute toggle, "currently playing" readout, and Open — all reflecting live state.
 - **Goal:** Core control without opening the window.

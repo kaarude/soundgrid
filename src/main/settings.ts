@@ -50,23 +50,57 @@ export function sanitizeSettings(value: Partial<Settings>): Settings {
   const overlap = ["stop", "overlap", "queue"].includes(value.overlap ?? "")
     ? value.overlap!
     : DEFAULT_SETTINGS.overlap;
-  const micOnly = Boolean(value.micOnly);
+  const micOutputDeviceId = nullableString(value.micOutputDeviceId);
+  const monitorDeviceId = nullableString(value.monitorDeviceId);
+  const realMicDeviceId = nullableString(value.realMicDeviceId);
+  const micOnly = bool(value.micOnly, DEFAULT_SETTINGS.micOnly);
+  const passthrough =
+    bool(value.passthrough, DEFAULT_SETTINGS.passthrough) &&
+    Boolean(micOutputDeviceId && realMicDeviceId);
   return {
-    ...DEFAULT_SETTINGS,
-    ...value,
+    micOutputDeviceId,
+    monitorDeviceId,
+    realMicDeviceId,
+    passthrough,
     theme,
     overlap,
-    masterMicVolume: clamp01(value.masterMicVolume),
-    monitorVolume: clamp01(value.monitorVolume),
+    masterMicVolume: clamp01(
+      value.masterMicVolume,
+      DEFAULT_SETTINGS.masterMicVolume,
+    ),
+    monitorVolume: clamp01(value.monitorVolume, DEFAULT_SETTINGS.monitorVolume),
+    stopAllHotkey: optionalString(value.stopAllHotkey),
+    micMuteHotkey: optionalString(value.micMuteHotkey),
     micOnly,
-    headsetOnly: micOnly ? false : Boolean(value.headsetOnly),
+    headsetOnly: micOnly
+      ? false
+      : bool(value.headsetOnly, DEFAULT_SETTINGS.headsetOnly),
+    runOnStartup: bool(value.runOnStartup, DEFAULT_SETTINGS.runOnStartup),
+    minimizeToTray: bool(value.minimizeToTray, DEFAULT_SETTINGS.minimizeToTray),
+    autoSelectMic: bool(value.autoSelectMic, DEFAULT_SETTINGS.autoSelectMic),
+    onboardingComplete: bool(
+      value.onboardingComplete,
+      DEFAULT_SETTINGS.onboardingComplete,
+    ),
   };
 }
 
-function clamp01(value: unknown): number {
+function clamp01(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.max(0, Math.min(1, value))
-    : 1;
+    : fallback;
+}
+
+function bool(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function nullableString(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
 }
 
 async function backupCorruptFile(filePath: string): Promise<void> {
