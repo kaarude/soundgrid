@@ -107,7 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   micOutputDeviceId: null,
   monitorDeviceId: null,
   realMicDeviceId: null,
-  passthrough: true,
+  passthrough: false,
   masterMicVolume: 0.9,
   monitorVolume: 0.8,
   overlap: "stop",

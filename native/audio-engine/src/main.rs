@@ -119,19 +119,24 @@ impl Engine {
             monitor.overlap = overlap;
         }
 
-        let mic_device = select_output(&self.host, mic_output_id.as_deref())?
-            .context("no mic-output playback device is available")?;
+        let mut mic_outputs = self
+            .host
+            .output_devices()
+            .context("cannot enumerate output devices")?;
+        let mic_device = select(&mut mic_outputs, mic_output_id.as_deref())?;
         let monitor_device = select_output(&self.host, monitor_id.as_deref())?
             .context("no monitor playback device is available")?;
 
-        self.mic_stream = Some(build_output(
-            &mic_device,
-            self.mic.clone(),
-            Some(self.capture.clone()),
-            self.mic_meter.clone(),
-            BusName::Mic,
-            self.ended_tx.clone(),
-        )?);
+        if let Some(device) = mic_device {
+            self.mic_stream = Some(build_output(
+                &device,
+                self.mic.clone(),
+                Some(self.capture.clone()),
+                self.mic_meter.clone(),
+                BusName::Mic,
+                self.ended_tx.clone(),
+            )?);
+        }
         self.monitor_stream = Some(build_output(
             &monitor_device,
             self.monitor.clone(),
@@ -141,17 +146,19 @@ impl Engine {
             self.ended_tx.clone(),
         )?);
 
-        if passthrough {
-            if let Some(input) = select_input(&self.host, real_mic_id.as_deref())? {
+        if passthrough && self.mic_stream.is_some() {
+            let mut inputs = self
+                .host
+                .input_devices()
+                .context("cannot enumerate input devices")?;
+            if let Some(input) = select(&mut inputs, real_mic_id.as_deref())? {
                 self.capture_stream = Some(build_input(&input, self.capture.clone())?);
             }
         }
 
-        self.mic_stream
-            .as_ref()
-            .unwrap()
-            .play()
-            .context("cannot start mic output")?;
+        if let Some(stream) = &self.mic_stream {
+            stream.play().context("cannot start mic output")?;
+        }
         self.monitor_stream
             .as_ref()
             .unwrap()
@@ -303,24 +310,17 @@ fn enumerate(devices: impl Iterator<Item = Device>) -> Result<Vec<DeviceInfo>> {
 }
 
 fn select_output(host: &cpal::Host, id: Option<&str>) -> Result<Option<Device>> {
-    select(
-        host.output_devices()
-            .context("cannot enumerate output devices")?,
-        id,
-    )
-    .map(|device| device.or_else(|| host.default_output_device()))
+    let mut outputs = host
+        .output_devices()
+        .context("cannot enumerate output devices")?;
+    let selected = select(&mut outputs, id)?;
+    Ok(selected.or_else(|| host.default_output_device()))
 }
 
-fn select_input(host: &cpal::Host, id: Option<&str>) -> Result<Option<Device>> {
-    select(
-        host.input_devices()
-            .context("cannot enumerate input devices")?,
-        id,
-    )
-    .map(|device| device.or_else(|| host.default_input_device()))
-}
-
-fn select(devices: impl Iterator<Item = Device>, id: Option<&str>) -> Result<Option<Device>> {
+fn select(
+    devices: &mut impl Iterator<Item = Device>,
+    id: Option<&str>,
+) -> Result<Option<Device>> {
     let Some(id) = id else { return Ok(None) };
     for (index, device) in devices.enumerate() {
         let label = device.name().context("cannot read audio device name")?;
@@ -381,7 +381,7 @@ where
                 let queue_mode = matches!(state.overlap, MixMode::Queue);
                 let paused = state.paused;
                 let gain = if state.muted { 0.0 } else { state.volume };
-                let mut finished = Vec::new();
+                let mut finished: Vec<String> = Vec::new();
                 let mut capture = capture
                     .as_ref()
                     .map(|buffer| buffer.lock().expect("capture mutex poisoned"));
@@ -415,7 +415,7 @@ where
                             if voice.position >= frame_count as f64 {
                                 if voice.looped {
                                     voice.position %= frame_count as f64;
-                                } else {
+                                } else if !finished.contains(&voice.id) {
                                     finished.push(voice.id.clone());
                                 }
                             }

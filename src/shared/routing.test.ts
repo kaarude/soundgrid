@@ -63,6 +63,25 @@ describe("selectableMonitorDevices", () => {
 });
 
 describe("reconcileAudioRouting", () => {
+  it("does not auto-enable microphone passthrough from defaults", () => {
+    expect(DEFAULT_SETTINGS.passthrough).toBe(false);
+    expect(
+      reconcileAudioRouting(
+        settings({
+          micOutputDeviceId: null,
+          monitorDeviceId: null,
+          realMicDeviceId: null,
+          autoSelectMic: true,
+          headsetOnly: true,
+        }),
+        devices,
+      ),
+    ).toEqual({
+      micOutputDeviceId: "cable",
+      monitorDeviceId: "headphones",
+    });
+  });
+
   it("auto-selects the cable, headphones, and real mic when routes are empty", () => {
     expect(
       reconcileAudioRouting(

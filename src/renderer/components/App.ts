@@ -220,7 +220,7 @@ function syncSystemState(alert: HTMLElement, text: HTMLElement): void {
 }
 
 // Re-enumerate device labels once a mic permission gesture happens anywhere.
-navigator.mediaDevices.addEventListener?.(
+navigator.mediaDevices?.addEventListener?.(
   "devicechange",
   () =>
     void refreshDevices().then((devices) => {

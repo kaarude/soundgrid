@@ -11,13 +11,7 @@ import {
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { IPC } from "../shared/ipc.js";
-import {
-  AudioEngineEvent,
-  Settings,
-  SoundClip,
-  SoundClipPatch,
-  HotkeyRegistrationResult,
-} from "../shared/types.js";
+import { AudioEngineEvent, HotkeyRegistrationResult } from "../shared/types.js";
 import { LibraryStore } from "./library.js";
 import { SettingsStore } from "./settings.js";
 import { AudioEngine } from "./audio-engine.js";
@@ -25,6 +19,15 @@ import { DeviceManager } from "./devices.js";
 import { HotkeyManager } from "./hotkeys.js";
 import { DriverManager } from "./driver-manager.js";
 import { autoUpdater } from "electron-updater";
+import {
+  requireBoolean,
+  requireFiniteNumber,
+  requireString,
+  requireStringArray,
+  validateHotkeyBindings,
+  validateSettingsPatch,
+  validateSoundClipPatch,
+} from "./ipc-validation.js";
 
 // The native sidecar owns decoding, WASAPI/CoreAudio streams, mixing and
 // metering. On Windows, the mic bus is rendered to VB-CABLE's playback
@@ -97,7 +100,7 @@ class SoundGrid {
       },
     });
 
-    const devUrl = process.env.VITE_DEV_SERVER_URL;
+    const devUrl = devServerUrl();
     if (devUrl) {
       this.win.loadURL(devUrl);
       this.win.webContents.openDevTools({ mode: "detach" });
@@ -211,23 +214,28 @@ class SoundGrid {
   private registerIpc() {
     // ---- Library ----
     ipcMain.handle(IPC.LIBRARY_GET, () => this.library.getClips());
-    ipcMain.handle(IPC.LIBRARY_IMPORT, async (_e, filePaths: string[]) => {
-      const added = await this.library.importFiles(filePaths);
+    ipcMain.handle(IPC.LIBRARY_IMPORT, async (_e, filePaths: unknown) => {
+      const added = await this.library.importFiles(
+        requireStringArray(filePaths, "filePaths"),
+      );
       return added;
     });
-    ipcMain.handle(IPC.LIBRARY_REMOVE, async (_e, id: string) => {
-      await this.library.removeClip(id);
+    ipcMain.handle(IPC.LIBRARY_REMOVE, async (_e, id: unknown) => {
+      const clipId = requireString(id, "clipId");
+      await this.library.removeClip(clipId);
       this.registerPersistedHotkeys();
     });
     ipcMain.handle(
       IPC.LIBRARY_UPDATE_CLIP,
-      async (_e, id: string, patch: SoundClipPatch) => {
-        const previousHotkey = this.library.byId(id)?.hotkey;
-        const clip = await this.library.updateClip(id, patch);
+      async (_e, id: unknown, rawPatch: unknown) => {
+        const clipId = requireString(id, "clipId");
+        const patch = validateSoundClipPatch(rawPatch);
+        const previousHotkey = this.library.byId(clipId)?.hotkey;
+        const clip = await this.library.updateClip(clipId, patch);
         const hotkeys = this.registerPersistedHotkeys();
-        const failed = hotkeys.failures.some((item) => item.id === id);
+        const failed = hotkeys.failures.some((item) => item.id === clipId);
         if (failed && Object.prototype.hasOwnProperty.call(patch, "hotkey")) {
-          const reverted = await this.library.updateClip(id, {
+          const reverted = await this.library.updateClip(clipId, {
             hotkey: previousHotkey ?? null,
           });
           this.registerPersistedHotkeys();
@@ -239,7 +247,8 @@ class SoundGrid {
 
     // ---- Settings ----
     ipcMain.handle(IPC.SETTINGS_GET, () => this.settings.get());
-    ipcMain.handle(IPC.SETTINGS_SET, async (_e, patch: Partial<Settings>) => {
+    ipcMain.handle(IPC.SETTINGS_SET, async (_e, rawPatch: unknown) => {
+      const patch = validateSettingsPatch(rawPatch);
       const previous = this.settings.get();
       const next = await this.settings.set(patch);
       this.audio.applySettings(next);
@@ -275,46 +284,46 @@ class SoundGrid {
     ipcMain.handle(IPC.CABLE_DONATE, () => this.driver.openDonationPage());
 
     // ---- Mic transport ----
-    ipcMain.handle(IPC.PLAY_BOTH, (_e, clipId: string) =>
-      this.audio.playBoth(this.library.byId(clipId)),
+    ipcMain.handle(IPC.PLAY_BOTH, (_e, clipId: unknown) =>
+      this.audio.playBoth(this.library.byId(requireString(clipId, "clipId"))),
     );
-    ipcMain.handle(IPC.MIC_PLAY, (_e, clipId: string) =>
-      this.audio.playToMic(this.library.byId(clipId)),
+    ipcMain.handle(IPC.MIC_PLAY, (_e, clipId: unknown) =>
+      this.audio.playToMic(this.library.byId(requireString(clipId, "clipId"))),
     );
     ipcMain.handle(IPC.MIC_PAUSE, () => this.audio.pauseMic());
     ipcMain.handle(IPC.MIC_RESUME, () => this.audio.resumeMic());
     ipcMain.handle(IPC.MIC_STOP, () => this.audio.stopMic());
     ipcMain.handle(IPC.MIC_STOP_ALL, () => this.audio.stopAll());
-    ipcMain.handle(IPC.MIC_SET_MUTE, (_e, muted: boolean) =>
-      this.audio.setMicMute(muted),
+    ipcMain.handle(IPC.MIC_SET_MUTE, (_e, muted: unknown) =>
+      this.audio.setMicMute(requireBoolean(muted, "muted")),
     );
-    ipcMain.handle(IPC.MIC_SET_VOLUME, (_e, vol: number) =>
-      this.audio.setMicVolume(vol),
+    ipcMain.handle(IPC.MIC_SET_VOLUME, (_e, vol: unknown) =>
+      this.audio.setMicVolume(requireFiniteNumber(vol, "volume")),
     );
 
     // ---- Monitor transport ----
-    ipcMain.handle(IPC.MONITOR_PLAY, (_e, clipId: string) =>
-      this.audio.playToMonitor(this.library.byId(clipId)),
+    ipcMain.handle(IPC.MONITOR_PLAY, (_e, clipId: unknown) =>
+      this.audio.playToMonitor(
+        this.library.byId(requireString(clipId, "clipId")),
+      ),
     );
     ipcMain.handle(IPC.MONITOR_PAUSE, () => this.audio.pauseMonitor());
     ipcMain.handle(IPC.MONITOR_RESUME, () => this.audio.resumeMonitor());
     ipcMain.handle(IPC.MONITOR_STOP, () => this.audio.stopMonitor());
-    ipcMain.handle(IPC.MONITOR_SET_MUTE, (_e, muted: boolean) =>
-      this.audio.setMonitorMute(muted),
+    ipcMain.handle(IPC.MONITOR_SET_MUTE, (_e, muted: unknown) =>
+      this.audio.setMonitorMute(requireBoolean(muted, "muted")),
     );
-    ipcMain.handle(IPC.MONITOR_SET_VOLUME, (_e, vol: number) =>
-      this.audio.setMonitorVolume(vol),
+    ipcMain.handle(IPC.MONITOR_SET_VOLUME, (_e, vol: unknown) =>
+      this.audio.setMonitorVolume(requireFiniteNumber(vol, "volume")),
     );
 
     // ---- Hotkeys ----
-    ipcMain.handle(
-      IPC.HOTKEYS_REGISTER,
-      (_e, bindings: { id: string; keys: string }[]) =>
-        this.hotkeys.registerAll(bindings, (id) => {
-          if (id === "__stop_all__") return this.audio.stopAll();
-          if (id === "__mic_mute__") return this.audio.toggleMicMute();
-          return this.audio.playBoth(this.library.byId(id));
-        }),
+    ipcMain.handle(IPC.HOTKEYS_REGISTER, (_e, bindings: unknown) =>
+      this.hotkeys.registerAll(validateHotkeyBindings(bindings), (id) => {
+        if (id === "__stop_all__") return this.audio.stopAll();
+        if (id === "__mic_mute__") return this.audio.toggleMicMute();
+        return this.audio.playBoth(this.library.byId(id));
+      }),
     );
     ipcMain.handle(IPC.HOTKEYS_UNREGISTER, () => this.hotkeys.unregisterAll());
 
@@ -404,4 +413,23 @@ function isSafeExternalUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+function devServerUrl(): string | undefined {
+  if (app.isPackaged) return undefined;
+  const value = process.env.VITE_DEV_SERVER_URL;
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    const hostAllowed =
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "::1";
+    if (parsed.protocol === "http:" && hostAllowed && parsed.port === "5173") {
+      return parsed.toString();
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }
