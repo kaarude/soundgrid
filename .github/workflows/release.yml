@@ -38,6 +38,9 @@ jobs:
       - name: Check TypeScript
         run: pnpm check
 
+      - name: Run tests
+        run: pnpm test
+
       - name: Check native audio engine
         run: cargo check --locked --manifest-path native/audio-engine/Cargo.toml
 
@@ -50,11 +53,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SoundGrid-Windows-Setup
-          path: release/SoundGrid-Setup-*.exe
+          path: |
+            release/SoundGrid-Setup-*.exe
+            release/SoundGrid-Setup-*.exe.blockmap
+            release/latest.yml
           if-no-files-found: error
 
       - name: Attach installer to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/SoundGrid-Setup-*.exe
+          files: |
+            release/SoundGrid-Setup-*.exe
+            release/SoundGrid-Setup-*.exe.blockmap
+            release/latest.yml

@@ -4,6 +4,8 @@
 
 Windows-first. Distributed as a single `.exe` (NSIS installer + portable build). MIT-licensed and free forever.
 
+**[Download SoundGrid for Windows (.exe)](https://github.com/kaarude/soundgrid/releases/latest)**
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-WIP%20/%20pre--alpha-orange)](#roadmap)
 [![Made with Electron](https://img.shields.io/badge/Electron-33-47848f.svg)](https://www.electronjs.org/)
@@ -25,7 +27,7 @@ Soundboard-class apps inject audio via a **virtual audio device**. Commercial
 apps like Soundpad ship their own signed kernel driver; an open-source project
 realistically relies on a free virtual cable such as **[VB-CABLE](https://vb-audio.com/Cable/)**.
 
-SoundGrid routes its *mic bus* to whichever device you select as your
+SoundGrid routes its _mic bus_ to whichever device you select as your
 "Mic output device" — point that at a virtual cable, then set the cable as your
 microphone in Discord / OBS / your game, and other people hear your clips. See
 [`PLAN.html`](PLAN.html) for the full design.
@@ -107,21 +109,21 @@ npm run dev
 ```
 
 This launches Vite on `:5173` and starts Electron pointed at it. On first run,
-open **Settings** and pick your virtual audio cable as the _Mic output device_.
+follow the in-app setup guide. It checks the cable, routing, and first import.
 
 Useful scripts:
 
-| Command            | What it does                                   |
-| ------------------ | ---------------------------------------------- |
-| `npm run dev`      | Vite + Electron, hot-reloading renderer        |
-| `npm run build`    | Build renderer + main into `dist/`             |
-| `npm run pack`     | Build + unpacked app (sanity check)            |
-| `npm run dist`     | Build + Windows installer and portable exe     |
-| `npm run dist:installer` | Build only `SoundGrid-Setup-*.exe`       |
-| `npm run dist:portable` | Build only the no-install portable exe     |
-| `npm run dist:mac` | Build + macOS package (dev-only; no mic inject)|
-| `npm run check`    | Type-check main + renderer                      |
-| `npm run format`   | Prettier write across the repo                 |
+| Command                  | What it does                                    |
+| ------------------------ | ----------------------------------------------- |
+| `npm run dev`            | Vite + Electron, hot-reloading renderer         |
+| `npm run build`          | Build renderer + main into `dist/`              |
+| `npm run pack`           | Build + unpacked app (sanity check)             |
+| `npm run dist`           | Build + Windows installer and portable exe      |
+| `npm run dist:installer` | Build only `SoundGrid-Setup-*.exe`              |
+| `npm run dist:portable`  | Build only the no-install portable exe          |
+| `npm run dist:mac`       | Build + macOS package (dev-only; no mic inject) |
+| `npm run check`          | Type-check main + renderer                      |
+| `npm run format`         | Prettier write across the repo                  |
 
 ## Building a Windows `.exe`
 
@@ -151,10 +153,15 @@ the `.exe` directly to a GitHub Release.
 
 - [x] Native WASAPI mic/monitor routing on Windows
 - [x] Real-mic passthrough / mixing into the mic bus
-- [ ] Per-clip hotkey binding UI
-- [ ] Library import + drag-and-drop
+- [x] Per-clip and global hotkey binding UI
+- [x] Library import + drag-and-drop
 - [x] Persisted device selection
 - [x] GitHub Actions release pipeline (NSIS installer)
+- [x] Guided first-run routing setup
+- [x] Automatic update download and install
+
+Hardware validation, code signing, and explicit public-redistribution confirmation
+from VB-Audio remain release gates. See [`ROADMAP.md`](ROADMAP.md).
 
 ## License
 
@@ -162,7 +169,6 @@ the `.exe` directly to a GitHub Release.
 
 ## Contributing
 
-This is early and pre-alpha. The design language and two-bus model are the load-
-bearing decisions; please read [`PRODUCT.md`](PRODUCT.md), [`DESIGN.md`](DESIGN.md),
-and [`PLAN.html`](PLAN.html) before large changes. PRs that keep the control
-surface calm and the firing surface fun are very welcome.
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting changes. Security,
+privacy, and troubleshooting guidance lives in [`SECURITY.md`](SECURITY.md),
+[`PRIVACY.md`](PRIVACY.md), and [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).

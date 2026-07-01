@@ -73,11 +73,26 @@ pub fn decode(path: &str) -> Result<DecodedAudio> {
     }
 
     anyhow::ensure!(!samples.is_empty(), "audio file decoded to no samples");
+    normalize_peak(&mut samples);
     Ok(DecodedAudio {
         samples,
         channels,
         sample_rate,
     })
+}
+
+fn normalize_peak(samples: &mut [f32]) {
+    let peak = samples
+        .iter()
+        .fold(0.0_f32, |current, sample| current.max(sample.abs()));
+    // Avoid aggressively amplifying near-silent files and leave already-safe
+    // clips unchanged. Louder files are reduced to consistent headroom.
+    if peak > 0.95 {
+        let gain = 0.95 / peak;
+        for sample in samples {
+            *sample *= gain;
+        }
+    }
 }
 
 fn append_interleaved(buffer: &AudioBufferRef<'_>, output: &mut Vec<f32>) {
@@ -141,7 +156,8 @@ mod tests {
         assert_eq!(decoded.channels, 1);
         assert_eq!(decoded.sample_rate, 48_000);
         assert_eq!(decoded.samples.len(), 4);
-        assert!(decoded.samples[1] > 0.99);
-        assert!(decoded.samples[2] <= -1.0);
+        assert!(decoded.samples[1] > 0.94);
+        assert!(decoded.samples[2] <= -0.94);
+        assert!(decoded.samples.iter().all(|sample| sample.abs() <= 0.951));
     }
 }

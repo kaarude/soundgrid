@@ -28,6 +28,7 @@ export class HotkeyManager {
   ): HotkeyRegistrationResult {
     this.unregisterAll();
     const failures: HotkeyRegistrationResult["failures"] = [];
+    const seen = new Set<string>();
     for (const { id, keys } of bindings) {
       if (!keys) continue;
       const accel = this.normalize(keys);
@@ -35,6 +36,12 @@ export class HotkeyManager {
         failures.push({ id, keys, reason: "invalid" });
         continue;
       }
+      const identity = accel.toLowerCase();
+      if (seen.has(identity)) {
+        failures.push({ id, keys, reason: "duplicate" });
+        continue;
+      }
+      seen.add(identity);
       try {
         const ok = globalShortcut.register(accel, () => onFire(id));
         if (ok) this.registered.add(accel);

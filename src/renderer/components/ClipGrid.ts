@@ -28,10 +28,9 @@ export function syncClipGrid(): void {
 
   library.innerHTML = "";
 
-  if (clips.length === 0) {
-    library.append(FirstRun());
-    return;
-  }
+  if (!store.state.settings.onboardingComplete) library.append(SetupGuide());
+
+  if (clips.length === 0) return;
 
   const header = document.createElement("header");
   header.className = "library-header";
@@ -54,7 +53,45 @@ export function syncClipGrid(): void {
   collapse.addEventListener("click", () =>
     store.update({ soundsCollapsed: !store.state.soundsCollapsed }),
   );
-  header.append(tabs, collapse);
+  const tools = document.createElement("div");
+  tools.className = "library-tools";
+  const select = document.createElement("button");
+  select.type = "button";
+  select.className = "library-select";
+  select.textContent = store.state.bulkSelecting
+    ? "Cancel selection"
+    : "Select";
+  select.setAttribute("aria-pressed", String(store.state.bulkSelecting));
+  select.addEventListener("click", () =>
+    store.update({
+      bulkSelecting: !store.state.bulkSelecting,
+      selectedClipIds: [],
+    }),
+  );
+  tools.append(select);
+  if (store.state.bulkSelecting) {
+    const allSelected =
+      list.length > 0 &&
+      list.every((clip) => store.state.selectedClipIds.includes(clip.id));
+    const all = document.createElement("button");
+    all.type = "button";
+    all.className = "library-select";
+    all.textContent = allSelected ? "Clear all" : "Select all";
+    all.addEventListener("click", () =>
+      store.update({
+        selectedClipIds: allSelected ? [] : list.map((clip) => clip.id),
+      }),
+    );
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "library-select library-select--danger";
+    remove.textContent = `Remove (${store.state.selectedClipIds.length})`;
+    remove.disabled = store.state.selectedClipIds.length === 0;
+    remove.addEventListener("click", () => void removeSelected());
+    tools.append(all, remove);
+  }
+  tools.append(collapse);
+  header.append(tabs, tools);
   library.append(header);
 
   if (soundsCollapsed) {
@@ -78,6 +115,25 @@ export function syncClipGrid(): void {
   library.append(grid);
 }
 
+async function removeSelected(): Promise<void> {
+  const ids = [...store.state.selectedClipIds];
+  try {
+    await Promise.all(ids.map((id) => window.soundgrid.removeClip(id)));
+    store.update({
+      clips: store.state.clips.filter((clip) => !ids.includes(clip.id)),
+      selectedClipIds: [],
+      bulkSelecting: false,
+    });
+  } catch (error) {
+    store.update({
+      audioError:
+        error instanceof Error
+          ? error.message
+          : "Could not remove the selected clips.",
+    });
+  }
+}
+
 function ViewTab(view: "favorites" | "all", label: string): HTMLButtonElement {
   const button = document.createElement("button");
   const selected = store.state.activeLibraryView === view;
@@ -92,7 +148,7 @@ function ViewTab(view: "favorites" | "all", label: string): HTMLButtonElement {
   return button;
 }
 
-function FirstRun(): HTMLElement {
+function SetupGuide(): HTMLElement {
   const card = document.createElement("div");
   card.className = "firstrun";
 
@@ -101,28 +157,35 @@ function FirstRun(): HTMLElement {
   iconWrap.append(icon.mic());
 
   const title = document.createElement("h2");
-  title.textContent = "Your cue rack is empty";
+  title.textContent = "Set up your cue rack";
 
   const body = document.createElement("p");
-  body.innerHTML =
-    "SoundGrid plays clips into your microphone stream. That needs a <strong>virtual audio cable</strong> — a free device other apps can pick as your mic.";
+  body.textContent =
+    "Complete these checks once. SoundGrid will remember the routing and keep the guide available until everything is ready.";
 
   const steps = document.createElement("ol");
   steps.className = "firstrun-steps";
-  const s1 = document.createElement("li");
-  s1.innerHTML =
-    'Install <a href="https://vb-audio.com/Cable/" target="_blank" rel="noreferrer">VB-CABLE</a> (free, donationware).';
-  const s2 = document.createElement("li");
-  s2.textContent = "Open Settings and set “Mic output device” to the cable.";
-  const s3 = document.createElement("li");
-  s3.textContent =
-    "Import clips, then open a clip’s menu to assign a global hotkey.";
+  const cableReady = Boolean(store.state.cableStatus?.installed);
+  const routingReady = Boolean(
+    store.state.settings.micOutputDeviceId &&
+    store.state.settings.monitorDeviceId &&
+    (!store.state.settings.passthrough || store.state.settings.realMicDeviceId),
+  );
+  const clipsReady = store.state.clips.length > 0;
+  const s1 = setupStep("Install the virtual audio cable", cableReady);
+  const s2 = setupStep(
+    "Confirm mic, monitor, and passthrough routing",
+    routingReady,
+  );
+  const s3 = setupStep("Import at least one audio clip", clipsReady);
   steps.append(s1, s2, s3);
 
   const settings = document.createElement("button");
   settings.type = "button";
   settings.className = "firstrun-cta";
-  settings.textContent = "Configure routing";
+  settings.textContent = cableReady
+    ? "Configure routing"
+    : "Install and configure";
   settings.addEventListener("click", () =>
     store.update({ settingsOpen: true }),
   );
@@ -136,6 +199,25 @@ function FirstRun(): HTMLElement {
   importButton.append(importLabel);
   importButton.addEventListener("click", () => void importAudioFiles());
 
-  card.append(iconWrap, title, body, steps, settings, importButton);
+  const complete = document.createElement("button");
+  complete.type = "button";
+  complete.className = "firstrun-complete";
+  complete.textContent = "Finish setup";
+  complete.disabled = !(cableReady && routingReady && clipsReady);
+  complete.addEventListener("click", async () => {
+    const result = await window.soundgrid.setSettings({
+      onboardingComplete: true,
+    });
+    store.update({ settings: result.settings });
+  });
+
+  card.append(iconWrap, title, body, steps, settings, importButton, complete);
   return card;
+}
+
+function setupStep(label: string, complete: boolean): HTMLLIElement {
+  const step = document.createElement("li");
+  step.className = complete ? "is-complete" : "";
+  step.textContent = `${complete ? "Complete" : "Pending"}: ${label}`;
+  return step;
 }

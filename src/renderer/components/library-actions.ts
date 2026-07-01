@@ -19,9 +19,22 @@ export async function importDroppedAudioFiles(
 
 async function importAudioPaths(files: string[]): Promise<SoundClip[]> {
   if (!files.length) return [];
-  const added = await window.soundgrid.importFiles(files);
-  if (added.length) {
-    store.update({ clips: [...store.state.clips, ...added] });
+  try {
+    const added = await window.soundgrid.importFiles(files);
+    if (added.length) {
+      store.update({
+        clips: [...store.state.clips, ...added],
+        audioError: null,
+      });
+    }
+    return added;
+  } catch (error) {
+    store.update({
+      audioError:
+        error instanceof Error
+          ? `Import failed: ${error.message}`
+          : "Import failed. Check the file and try again.",
+    });
+    return [];
   }
-  return added;
 }

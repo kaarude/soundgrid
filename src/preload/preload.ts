@@ -6,6 +6,7 @@ import {
   CableStatus,
   HotkeyRegistrationResult,
   Settings,
+  SettingsUpdateResult,
   SoundClip,
   SoundClipPatch,
   SoundClipUpdateResult,
@@ -28,10 +29,11 @@ export interface SoundGridApi {
     id: string,
     patch: SoundClipPatch,
   ) => Promise<SoundClipUpdateResult>;
+  onLibraryChanged: (handler: (clips: SoundClip[]) => void) => () => void;
 
   // settings
   getSettings: () => Promise<Settings>;
-  setSettings: (patch: Partial<Settings>) => Promise<Settings>;
+  setSettings: (patch: Partial<Settings>) => Promise<SettingsUpdateResult>;
 
   // devices + native engine events
   listDevices: () => Promise<AudioDevices>;
@@ -76,6 +78,12 @@ contextBridge.exposeInMainWorld("soundgrid", {
   removeClip: (id: string) => ipcRenderer.invoke(IPC.LIBRARY_REMOVE, id),
   updateClip: (id: string, patch: SoundClipPatch) =>
     ipcRenderer.invoke(IPC.LIBRARY_UPDATE_CLIP, id, patch),
+  onLibraryChanged: (handler: (clips: SoundClip[]) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, clips: SoundClip[]) =>
+      handler(clips);
+    ipcRenderer.on(IPC.LIBRARY_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.LIBRARY_CHANGED, listener);
+  },
 
   getSettings: () => ipcRenderer.invoke(IPC.SETTINGS_GET),
   setSettings: (patch: Partial<Settings>) =>

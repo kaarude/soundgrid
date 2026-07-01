@@ -24,6 +24,7 @@ import { AudioEngine } from "./audio-engine.js";
 import { DeviceManager } from "./devices.js";
 import { HotkeyManager } from "./hotkeys.js";
 import { DriverManager } from "./driver-manager.js";
+import { autoUpdater } from "electron-updater";
 
 // The native sidecar owns decoding, WASAPI/CoreAudio streams, mixing and
 // metering. On Windows, the mic bus is rendered to VB-CABLE's playback
@@ -38,6 +39,11 @@ class SoundGrid {
   private devices = new DeviceManager(this.audio);
   private driver = new DriverManager(this.audio);
   private hotkeys = new HotkeyManager();
+  private trayState = {
+    micPlaying: null as string | null,
+    monitorPlaying: null as string | null,
+    micMuted: false,
+  };
 
   async start() {
     await app.whenReady();
@@ -47,6 +53,9 @@ class SoundGrid {
     await fs.mkdir(soundsDir, { recursive: true });
 
     await this.library.init(path.join(userDataDir, "library.json"), soundsDir);
+    this.library.watch((clips) =>
+      this.win?.webContents.send(IPC.LIBRARY_CHANGED, clips),
+    );
     await this.settings.init(path.join(userDataDir, "settings.json"));
 
     this.audio.onEvent((event) => this.onAudioEvent(event));
@@ -56,6 +65,7 @@ class SoundGrid {
     this.registerPersistedHotkeys();
     this.createWindow();
     this.createTray();
+    this.configureUpdates();
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) this.createWindow();
@@ -63,6 +73,7 @@ class SoundGrid {
     app.on("before-quit", () => {
       this.quitting = true;
       this.audio.shutdown();
+      this.library.close();
     });
   }
 
@@ -112,18 +123,76 @@ class SoundGrid {
 
   private quitting = false;
 
+  private configureUpdates(): void {
+    if (!app.isPackaged) return;
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on("error", (error) =>
+      console.error("Automatic update failed:", error),
+    );
+    autoUpdater.on("update-downloaded", async (info) => {
+      const result = await dialog.showMessageBox(this.win!, {
+        type: "info",
+        title: "SoundGrid update ready",
+        message: `SoundGrid ${info.version} is ready to install.`,
+        detail:
+          "Restart now to finish the update, or install it when SoundGrid closes.",
+        buttons: ["Restart now", "Later"],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      if (result.response === 0) {
+        this.quitting = true;
+        autoUpdater.quitAndInstall();
+      }
+    });
+    void autoUpdater
+      .checkForUpdates()
+      .catch((error) => console.error("Could not check for updates:", error));
+  }
+
   private createTray() {
-    const icon = nativeImage.createEmpty();
+    const iconPath = path.join(app.getAppPath(), "assets", "logo.svg");
+    const loadedIcon = nativeImage.createFromPath(iconPath);
+    const icon = loadedIcon.isEmpty()
+      ? nativeImage.createEmpty()
+      : loadedIcon.resize({ width: 16, height: 16 });
     this.tray = new Tray(icon);
     this.tray.setToolTip("SoundGrid");
     this.tray.on("click", () => this.win?.show());
+    this.refreshTray();
+  }
+
+  private refreshTray(): void {
+    if (!this.tray) return;
+    const nowPlaying = [
+      this.trayState.micPlaying ? `Mic: ${this.trayState.micPlaying}` : null,
+      this.trayState.monitorPlaying
+        ? `Monitor: ${this.trayState.monitorPlaying}`
+        : null,
+    ].filter((item): item is string => Boolean(item));
+    this.tray.setToolTip(
+      nowPlaying.length ? `SoundGrid — ${nowPlaying.join(" · ")}` : "SoundGrid",
+    );
     this.tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: "Open SoundGrid", click: () => this.win?.show() },
+        ...(nowPlaying.length
+          ? [
+              { type: "separator" as const },
+              ...nowPlaying.map((label) => ({ label, enabled: false })),
+            ]
+          : []),
+        { type: "separator" },
         {
-          label: "Stop all sounds",
-          click: () => this.audio.stopAll(),
+          label: this.trayState.micMuted
+            ? "Unmute microphone bus"
+            : "Mute microphone bus",
+          type: "checkbox",
+          checked: this.trayState.micMuted,
+          click: () => this.audio.toggleMicMute(),
         },
+        { label: "Stop all sounds", click: () => this.audio.stopAll() },
         { type: "separator" },
         {
           label: "Quit",
@@ -168,11 +237,31 @@ class SoundGrid {
     // ---- Settings ----
     ipcMain.handle(IPC.SETTINGS_GET, () => this.settings.get());
     ipcMain.handle(IPC.SETTINGS_SET, async (_e, patch: Partial<Settings>) => {
+      const previous = this.settings.get();
       const next = await this.settings.set(patch);
       this.audio.applySettings(next);
       app.setLoginItemSettings({ openAtLogin: next.runOnStartup });
-      this.registerPersistedHotkeys();
-      return next;
+      const hotkeys = this.registerPersistedHotkeys();
+      const changedHotkey = Object.prototype.hasOwnProperty.call(
+        patch,
+        "stopAllHotkey",
+      )
+        ? "__stop_all__"
+        : Object.prototype.hasOwnProperty.call(patch, "micMuteHotkey")
+          ? "__mic_mute__"
+          : null;
+      if (
+        changedHotkey &&
+        hotkeys.failures.some((item) => item.id === changedHotkey)
+      ) {
+        const reverted = await this.settings.set({
+          stopAllHotkey: previous.stopAllHotkey,
+          micMuteHotkey: previous.micMuteHotkey,
+        });
+        this.registerPersistedHotkeys();
+        return { settings: reverted, hotkeys };
+      }
+      return { settings: next, hotkeys };
     });
 
     // ---- Devices ----
@@ -274,15 +363,7 @@ class SoundGrid {
       Boolean(binding),
     );
 
-    const seen = new Set<string>();
-    const unique = bindings.filter((binding) => {
-      const key = binding.keys.trim().toLowerCase();
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    return this.hotkeys.registerAll(unique, (id) => {
+    return this.hotkeys.registerAll(bindings, (id) => {
       if (id === "__stop_all__") return this.audio.stopAll();
       if (id === "__mic_mute__") return this.audio.toggleMicMute();
       return this.audio.playBoth(this.library.byId(id));
@@ -291,6 +372,19 @@ class SoundGrid {
 
   private onAudioEvent(event: AudioEngineEvent): void {
     this.win?.webContents.send(IPC.ON_STATE, event);
+    if (event.type === "transport") {
+      const key = event.bus === "mic" ? "micPlaying" : "monitorPlaying";
+      if (event.state === "stopped") this.trayState[key] = null;
+      else if (event.name) this.trayState[key] = event.name;
+      this.refreshTray();
+    } else if (event.type === "clipEnded") {
+      const key = event.bus === "mic" ? "micPlaying" : "monitorPlaying";
+      this.trayState[key] = null;
+      this.refreshTray();
+    } else if (event.type === "mute" && event.bus === "mic") {
+      this.trayState.micMuted = event.muted;
+      this.refreshTray();
+    }
     if (event.type === "error") console.error("Audio engine:", event.message);
   }
 }

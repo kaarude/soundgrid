@@ -1,6 +1,12 @@
 import { AudioDevice, Settings } from "../../shared/types";
 import { icon } from "./icons";
 import { store } from "./store";
+import {
+  captureHotkey,
+  findHotkeyConflict,
+  normalizeAccelerator,
+  validateAccelerator,
+} from "./hotkey-utils";
 
 // Settings drawer, opened from the topbar gear. Routing + toggles.
 // This is the control surface — calm, labeled, instrument-precise.
@@ -107,6 +113,11 @@ function renderSettingsBody(): void {
 
   const s = store.state.settings;
   const d = store.state.devices;
+  const monitorDevices = s.headsetOnly
+    ? d.monitors.filter((device) =>
+        /head(phone|set)|earbud|airpod/i.test(device.label),
+      )
+    : d.monitors;
 
   const routing = group("Routing");
   routing.append(deviceSummary());
@@ -121,7 +132,7 @@ function renderSettingsBody(): void {
     deviceField(
       "Headphone device",
       "monitorDeviceId",
-      d.monitors,
+      monitorDevices,
       s.monitorDeviceId,
       "Where you hear the monitor bus.",
     ),
@@ -162,6 +173,12 @@ function renderSettingsBody(): void {
     ),
   );
 
+  const hotkeys = group("Global hotkeys");
+  hotkeys.append(
+    hotkeyField("Stop all sounds", "stopAllHotkey", s.stopAllHotkey ?? ""),
+    hotkeyField("Mute microphone bus", "micMuteHotkey", s.micMuteHotkey ?? ""),
+  );
+
   const system = group("System");
   system.append(
     toggleField("Run on startup", "runOnStartup", s.runOnStartup),
@@ -174,7 +191,60 @@ function renderSettingsBody(): void {
   driver.classList.add("drawer-group--driver");
   driver.append(cableInstaller());
 
-  body.replaceChildren(routing, behavior, system, driver);
+  body.replaceChildren(routing, behavior, hotkeys, system, driver);
+}
+
+function hotkeyField(
+  label: string,
+  key: "stopAllHotkey" | "micMuteHotkey",
+  value: string,
+): HTMLElement {
+  const field = document.createElement("div");
+  field.className = "field";
+  const lab = document.createElement("label");
+  lab.className = "field-label";
+  lab.textContent = label;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.readOnly = true;
+  input.value = value;
+  input.placeholder = "Click, then press keys";
+  input.setAttribute("aria-label", `${label} shortcut`);
+  const hint = document.createElement("p");
+  hint.className = "field-hint";
+  hint.textContent = "Press a shortcut. Backspace or Escape clears it.";
+  input.addEventListener("keydown", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const captured = normalizeAccelerator(captureHotkey(event));
+    const validation = validateAccelerator(captured);
+    const comparableSettings = { ...store.state.settings, [key]: undefined };
+    const conflict = findHotkeyConflict(
+      key === "stopAllHotkey" ? "__stop_all__" : "__mic_mute__",
+      captured,
+      store.state.clips,
+      comparableSettings,
+    );
+    if (validation || conflict) {
+      hint.textContent = validation ?? `Already assigned to ${conflict}.`;
+      field.classList.add("is-error");
+      return;
+    }
+    const result = await window.soundgrid.setSettings({
+      [key]: captured || undefined,
+    });
+    const failure = result.hotkeys.failures.find(
+      (item) =>
+        item.id === (key === "stopAllHotkey" ? "__stop_all__" : "__mic_mute__"),
+    );
+    store.update({ settings: result.settings });
+    hint.textContent = failure
+      ? "Windows or another application is already using that shortcut."
+      : "Saved. This shortcut works while SoundGrid is in the background.";
+    field.classList.toggle("is-error", Boolean(failure));
+  });
+  field.append(lab, input, hint);
+  return field;
 }
 
 function cableInstaller(): HTMLElement {
@@ -197,7 +267,9 @@ function cableInstaller(): HTMLElement {
     install.type = "button";
     install.className = "settings-action settings-action--primary";
     install.disabled = !status.canInstall || store.state.cableInstalling;
-    install.textContent = store.state.cableInstalling ? "Installing…" : "Install VB-CABLE";
+    install.textContent = store.state.cableInstalling
+      ? "Installing…"
+      : "Install VB-CABLE";
     install.addEventListener("click", () => void installCable());
     actions.append(install);
   }
@@ -205,7 +277,10 @@ function cableInstaller(): HTMLElement {
   donate.type = "button";
   donate.className = "settings-action";
   donate.textContent = "VB-Audio donation page";
-  donate.addEventListener("click", () => void window.soundgrid.openCableDonation());
+  donate.addEventListener(
+    "click",
+    () => void window.soundgrid.openCableDonation(),
+  );
   actions.append(donate);
 
   const attribution = document.createElement("p");
@@ -224,7 +299,10 @@ async function installCable(): Promise<void> {
   } catch (error) {
     store.update({
       cableInstalling: false,
-      audioError: error instanceof Error ? error.message : "VB-CABLE installation failed.",
+      audioError:
+        error instanceof Error
+          ? error.message
+          : "VB-CABLE installation failed.",
     });
   }
 }
@@ -315,7 +393,17 @@ function toggleField(
     if (next && key === "micOnly") {
       void persistSettings({ micOnly: true, headsetOnly: false });
     } else if (next && key === "headsetOnly") {
-      void persistSettings({ headsetOnly: true, micOnly: false });
+      const currentMonitor = store.state.devices.monitors.find(
+        (device) => device.id === store.state.settings.monitorDeviceId,
+      );
+      const safeMonitor =
+        currentMonitor &&
+        /head(phone|set)|earbud|airpod/i.test(currentMonitor.label);
+      void persistSettings({
+        headsetOnly: true,
+        micOnly: false,
+        monitorDeviceId: safeMonitor ? currentMonitor.id : null,
+      });
     } else {
       void persistSetting(key, next);
     }
@@ -368,8 +456,8 @@ async function persistSetting(
 async function persistSettings(patch: Partial<Settings>): Promise<void> {
   setSaveStatus("saving", "Saving…");
   try {
-    const next = await window.soundgrid.setSettings(patch);
-    store.update({ settings: next });
+    const result = await window.soundgrid.setSettings(patch);
+    store.update({ settings: result.settings });
     setSaveStatus("saved", "Saved");
   } catch {
     setSaveStatus("error", "Could not save. Try again.");
@@ -383,7 +471,14 @@ function deviceSummary(): HTMLElement {
     Boolean(selected && list.some((device) => device.id === selected));
   const routingComplete =
     routeIsAvailable(settings.micOutputDeviceId, devices.micOutputs) &&
-    routeIsAvailable(settings.monitorDeviceId, devices.monitors) &&
+    routeIsAvailable(
+      settings.monitorDeviceId,
+      settings.headsetOnly
+        ? devices.monitors.filter((device) =>
+            /head(phone|set)|earbud|airpod/i.test(device.label),
+          )
+        : devices.monitors,
+    ) &&
     (!settings.passthrough ||
       routeIsAvailable(settings.realMicDeviceId, devices.realMics));
   const visualStatus =

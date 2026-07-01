@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs, watch, FSWatcher } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { LibraryFile, SoundClip, SoundClipPatch } from "../shared/types.js";
@@ -27,6 +27,8 @@ export class LibraryStore {
   private dbPath = "";
   private soundsDir = "";
   private clips: SoundClip[] = [];
+  private watcher?: FSWatcher;
+  private watchTimer?: NodeJS.Timeout;
 
   async init(dbPath: string, soundsDir: string) {
     this.dbPath = dbPath;
@@ -34,14 +36,65 @@ export class LibraryStore {
     try {
       const raw = await fs.readFile(dbPath, "utf8");
       this.clips = parseLibrary(raw);
-    } catch {
+    } catch (error) {
+      if (error instanceof SyntaxError) await backupCorruptFile(dbPath);
       this.clips = [];
       await this.persist();
     }
+    await this.syncFolder();
   }
 
   getClips(): SoundClip[] {
-    return [...this.clips];
+    return this.clips.map((clip) => ({ ...clip }));
+  }
+
+  watch(onChange: (clips: SoundClip[]) => void): void {
+    this.watcher?.close();
+    this.watcher = watch(this.soundsDir, () => {
+      clearTimeout(this.watchTimer);
+      this.watchTimer = setTimeout(async () => {
+        if (await this.syncFolder()) onChange(this.getClips());
+      }, 250);
+    });
+  }
+
+  close(): void {
+    clearTimeout(this.watchTimer);
+    this.watcher?.close();
+    this.watcher = undefined;
+  }
+
+  private async syncFolder(): Promise<boolean> {
+    const entries = await fs.readdir(this.soundsDir, { withFileTypes: true });
+    const files = entries
+      .filter((entry) => entry.isFile() && isSupported(entry.name))
+      .map((entry) => path.join(this.soundsDir, entry.name));
+    const known = new Set(
+      this.clips.map((clip) => path.resolve(clip.filePath)),
+    );
+    let changed = false;
+    for (const clip of this.clips) {
+      const missing = !existsSync(clip.filePath);
+      if (Boolean(clip.missing) !== missing) {
+        clip.missing = missing || undefined;
+        changed = true;
+      }
+    }
+    for (const filePath of files) {
+      if (known.has(path.resolve(filePath))) continue;
+      this.clips.push({
+        id: randomUUID(),
+        name: path.basename(filePath),
+        filePath,
+        favorite: false,
+        volume: 1,
+        loop: false,
+        broadcast: true,
+      });
+      changed = true;
+    }
+    if (changed) await this.persist();
+    return changed;
   }
 
   byId(id: string): SoundClip | undefined {
@@ -99,7 +152,17 @@ export class LibraryStore {
 
   private async persist() {
     const file: LibraryFile = { clips: this.clips };
-    await fs.writeFile(this.dbPath, JSON.stringify(file, null, 2), "utf8");
+    const temporary = `${this.dbPath}.tmp`;
+    await fs.writeFile(temporary, JSON.stringify(file, null, 2), "utf8");
+    await fs.rename(temporary, this.dbPath);
+  }
+}
+
+async function backupCorruptFile(filePath: string): Promise<void> {
+  try {
+    await fs.rename(filePath, `${filePath}.corrupt-${Date.now()}`);
+  } catch {
+    // The source may have disappeared between read and recovery.
   }
 }
 

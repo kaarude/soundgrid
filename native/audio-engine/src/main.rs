@@ -451,7 +451,17 @@ fn sample_voice(voice: &Voice, output_channel: usize) -> f32 {
     };
     let a = voice.audio.samples[frame * voice.audio.channels + channel];
     let b = voice.audio.samples[next * voice.audio.channels + channel];
-    a + (b - a) * fraction
+    let interpolated = a + (b - a) * fraction;
+    let fade_frames = (voice.audio.sample_rate as usize / 200).max(1); // 5 ms
+    let from_start = voice.position as usize;
+    let to_end = frames.saturating_sub(from_start + 1);
+    let envelope = if voice.looped {
+        (from_start.min(fade_frames) as f32 / fade_frames as f32).min(1.0)
+    } else {
+        (from_start.min(to_end).min(fade_frames) as f32 / fade_frames as f32)
+            .min(1.0)
+    };
+    interpolated * envelope
 }
 
 fn build_input(device: &Device, capture: Arc<Mutex<VecDeque<f32>>>) -> Result<Stream> {

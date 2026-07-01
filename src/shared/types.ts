@@ -11,6 +11,7 @@ export interface SoundClip {
   volume: number; // 0..1 per-clip gain
   loop: boolean;
   broadcast: boolean; // sent to mic output when true; monitor-only when false
+  missing?: boolean; // source copy disappeared from the managed library
 }
 
 export type SoundClipPatch = Partial<
@@ -23,7 +24,7 @@ export type SoundClipPatch = Partial<
 export interface HotkeyRegistrationFailure {
   id: string;
   keys: string;
-  reason: "invalid" | "unavailable";
+  reason: "invalid" | "unavailable" | "duplicate";
 }
 
 export interface HotkeyRegistrationResult {
@@ -33,6 +34,11 @@ export interface HotkeyRegistrationResult {
 
 export interface SoundClipUpdateResult {
   clip: SoundClip;
+  hotkeys: HotkeyRegistrationResult;
+}
+
+export interface SettingsUpdateResult {
+  settings: Settings;
   hotkeys: HotkeyRegistrationResult;
 }
 
@@ -84,6 +90,7 @@ export interface Settings {
   runOnStartup: boolean;
   minimizeToTray: boolean;
   autoSelectMic: boolean;
+  onboardingComplete: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -102,6 +109,7 @@ export const DEFAULT_SETTINGS: Settings = {
   runOnStartup: false,
   minimizeToTray: true,
   autoSelectMic: true,
+  onboardingComplete: false,
 };
 
 export interface LibraryFile {
