@@ -37,6 +37,16 @@ export interface SoundClipUpdateResult {
   hotkeys: HotkeyRegistrationResult;
 }
 
+export interface ImportSkippedFile {
+  filePath: string;
+  reason: "unsupported" | "empty" | "duplicate";
+}
+
+export interface LibraryImportResult {
+  added: SoundClip[];
+  skipped: ImportSkippedFile[];
+}
+
 export interface SettingsUpdateResult {
   settings: Settings;
   hotkeys: HotkeyRegistrationResult;

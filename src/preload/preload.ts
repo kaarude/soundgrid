@@ -5,6 +5,7 @@ import {
   AudioEngineEvent,
   CableStatus,
   HotkeyRegistrationResult,
+  LibraryImportResult,
   Settings,
   SettingsUpdateResult,
   SoundClip,
@@ -23,7 +24,7 @@ import {
 export interface SoundGridApi {
   // library
   getLibrary: () => Promise<SoundClip[]>;
-  importFiles: (paths: string[]) => Promise<SoundClip[]>;
+  importFiles: (paths: string[]) => Promise<LibraryImportResult>;
   removeClip: (id: string) => Promise<void>;
   updateClip: (
     id: string,

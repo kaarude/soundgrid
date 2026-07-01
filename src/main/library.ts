@@ -1,7 +1,19 @@
-import { existsSync, promises as fs, watch, FSWatcher } from "node:fs";
+import {
+  existsSync,
+  promises as fs,
+  statSync,
+  watch,
+  FSWatcher,
+} from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { LibraryFile, SoundClip, SoundClipPatch } from "../shared/types.js";
+import {
+  ImportSkippedFile,
+  LibraryFile,
+  LibraryImportResult,
+  SoundClip,
+  SoundClipPatch,
+} from "../shared/types.js";
 
 const SUPPORTED = new Set([
   ".aif",
@@ -101,10 +113,28 @@ export class LibraryStore {
     return this.clips.find((c) => c.id === id);
   }
 
-  async importFiles(filePaths: string[]): Promise<SoundClip[]> {
+  async importFiles(filePaths: string[]): Promise<LibraryImportResult> {
     const added: SoundClip[] = [];
+    const skipped: ImportSkippedFile[] = [];
+    const knownSources = new Set(
+      this.clips.map((clip) => path.resolve(clip.filePath)),
+    );
+    const seenImports = new Set<string>();
     for (const file of filePaths) {
-      if (!isSupported(file)) continue;
+      if (!isSupported(file)) {
+        skipped.push({ filePath: file, reason: "unsupported" });
+        continue;
+      }
+      if (fileIsEmpty(file)) {
+        skipped.push({ filePath: file, reason: "empty" });
+        continue;
+      }
+      const resolved = path.resolve(file);
+      if (knownSources.has(resolved) || seenImports.has(resolved)) {
+        skipped.push({ filePath: file, reason: "duplicate" });
+        continue;
+      }
+      seenImports.add(resolved);
       const ext = path.extname(file);
       const id = randomUUID();
       const dest = path.join(this.soundsDir, `${id}${ext}`);
@@ -121,10 +151,11 @@ export class LibraryStore {
         broadcast: true,
       };
       this.clips.push(clip);
+      knownSources.add(path.resolve(dest));
       added.push(clip);
     }
     await this.persist();
-    return added;
+    return { added, skipped };
   }
 
   async removeClip(id: string) {
@@ -224,4 +255,12 @@ function clamp01(value: number): number {
 function isInsideDir(filePath: string, dir: string): boolean {
   const rel = path.relative(dir, filePath);
   return Boolean(rel) && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function fileIsEmpty(filePath: string): boolean {
+  try {
+    return statSync(filePath).size === 0;
+  } catch {
+    return true;
+  }
 }
