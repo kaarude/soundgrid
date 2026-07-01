@@ -16,6 +16,7 @@ import {
 export function SoundCard(clip: SoundClip): HTMLElement {
   const card = document.createElement("article");
   card.className = "card";
+  card.dataset.clipId = clip.id;
   card.tabIndex = 0;
   const routeLabel = clip.broadcast ? "mic and monitor" : "monitor only";
   card.setAttribute("aria-label", `${clip.name}. Fire to ${routeLabel}`);
@@ -292,11 +293,16 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
         (item) => item.id === clip.id,
       );
       if (failed) {
-        error.textContent =
+        const message =
           failed.reason === "unavailable"
             ? "Saved, but Windows or another app already owns this shortcut."
             : "Saved, but Electron does not support this shortcut.";
-        setFormPending(form, false);
+        store.update({
+          clips: store.state.clips.map((item) =>
+            item.id === clip.id ? result.clip : item,
+          ),
+        });
+        reopenMenuWithError(clip.id, message);
         return;
       }
       store.update({
@@ -313,6 +319,19 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
 
   form.append(name.label, hotkey.label, volume, loop, route, error, footer);
   return form;
+}
+
+function reopenMenuWithError(clipId: string, message: string): void {
+  const card = Array.from(
+    document.querySelectorAll<HTMLElement>(".card[data-clip-id]"),
+  ).find((item) => item.dataset.clipId === clipId);
+  const trigger = card?.querySelector<HTMLButtonElement>(".card-menu");
+  trigger?.click();
+
+  const menu = card?.querySelector<HTMLFormElement>(".clip-menu");
+  const error = menu?.querySelector<HTMLElement>(".clip-menu-error");
+  if (error) error.textContent = message;
+  menu?.querySelector<HTMLInputElement>("input[readonly]")?.focus();
 }
 
 function routeOption(
