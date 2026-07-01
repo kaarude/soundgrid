@@ -1,66 +1,48 @@
 # SoundGrid
 
-> An open-source, cross-platform **soundboard** that plays your audio clips directly into your microphone stream — so games, Discord, OBS, and any voice app hear your sounds as if they came from your mic. No extra hardware.
-
-Windows-first. Distributed as a single `.exe` (NSIS installer + portable build). MIT-licensed and free forever.
-
-**[Download SoundGrid for Windows (.exe)](https://github.com/kaarude/soundgrid/releases/latest)**
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-WIP%20/%20pre--alpha-orange)](#roadmap)
 [![Made with Electron](https://img.shields.io/badge/Electron-33-47848f.svg)](https://www.electronjs.org/)
 
+An open-source, cross-platform **soundboard** that routes audio clips directly into a virtual microphone stream — so games, Discord, OBS, and other voice applications receive the audio as if it originated from a physical microphone. No additional hardware is required.
+
+SoundGrid is Windows-first and distributed as a single executable (NSIS installer and portable build). It is released under the MIT license.
+
+**[Download SoundGrid for Windows](https://github.com/kaarude/soundgrid/releases/latest)**
+
 ---
 
-## Why
+## Overview
 
-The only polished tools that do this are commercial, paid, and depend on a
-closed (often paid) kernel driver. SoundGrid is free, auditable, and relies on a
-free virtual audio cable instead. Its defining technical commitment is the
-**two-bus audio model** — the split between "what others hear" and "what you
-hear" is the whole product, and the UI makes it impossible to confuse the two.
+Existing tools in this category are typically commercial, require payment, and depend on a closed (often paid) kernel driver. SoundGrid is free, auditable, and relies on a free virtual audio cable instead.
 
-## The hard part, up front
+Windows and macOS do not provide a native "play audio into the microphone" API, so soundboard-class applications inject audio through a **virtual audio device**. SoundGrid routes its _mic bus_ to the device selected as the "Mic output device." Pointing this at a virtual cable such as **[VB-CABLE](https://vb-audio.com/Cable/)**, then selecting that cable as the microphone in Discord, OBS, or a game, transmits clips to other participants.
 
-Windows and macOS have **no built-in "play audio into the microphone" API**.
-Soundboard-class apps inject audio via a **virtual audio device**. Commercial
-apps like Soundpad ship their own signed kernel driver; an open-source project
-realistically relies on a free virtual cable such as **[VB-CABLE](https://vb-audio.com/Cable/)**.
-
-SoundGrid routes its _mic bus_ to whichever device you select as your
-"Mic output device" — point that at a virtual cable, then set the cable as your
-microphone in Discord / OBS / your game, and other people hear your clips. See
-[`PLAN.html`](PLAN.html) for the full design.
+The core architectural principle is the **two-bus audio model** — a clear separation between "what others hear" and "what you hear" that is enforced throughout the interface to prevent misconfiguration. The complete design is documented in [`PLAN.html`](PLAN.html).
 
 ## Two-bus audio model
 
 ```
 Sound clip
    │
-   ├──► [Mic bus]      ──► volume ──► Virtual Audio Cable  ──► apps hear it as mic
-   │                                  (+ your real mic mixed in if passthrough ON)
+   ├──► [Mic bus]      ──► volume ──► Virtual Audio Cable  ──► received as microphone input
+   │                                  (+ real mic mixed in when passthrough is enabled)
    │
-   └──► [Monitor bus]  ──► volume ──► Headset / headphones  ──► only YOU hear it
+   └──► [Monitor bus]  ──► volume ──► Headset / headphones  ──► local monitoring only
 ```
 
-- The mic bus has its own **play / pause / stop / mute / volume** — fully
-  independent of what you hear.
-- The monitor bus is **headphones only**. With _headset-only mode_ on, it never
-  leaks to speakers.
-- With _mic-only mode_ on, a clip is sent to the mic and you hear nothing locally.
+- The mic bus has independent **play / pause / stop / mute / volume** controls, fully decoupled from local monitoring.
+- The monitor bus is **headphones only**. With _headset-only mode_ enabled, audio never leaks to speakers.
+- With _mic-only mode_ enabled, a clip is sent to the mic bus with no local monitoring.
 
 ## Features
 
-- **Two independent buses** — mic out and monitor (headphones), each with its own
-  transport and volume.
-- **Global hotkeys** — fire any clip from memory while in-game; never tab out.
-- **Tray + per-clip controls** — the window is a control panel you check, not a
-  screen you watch. Designed for peripheral vision and muscle memory.
-- **Mute / monitor-only / mic-only routing states** — unmissable at a glance, by
-  shape and position, not color alone.
-- **Local library** — import your own clips; SoundGrid stores them in the app
-  data directory.
-- **Single `.exe`** — NSIS installer + portable build via `electron-builder`.
+- **Two independent buses** — mic output and monitor (headphones), each with its own transport and volume.
+- **Global hotkeys** — trigger any clip from memory while in-game, without switching windows.
+- **Tray and per-clip controls** — the window functions as a control panel rather than a primary view, designed for peripheral vision and muscle memory.
+- **Mute / monitor-only / mic-only routing states** — distinguishable at a glance by shape and position, not color alone.
+- **Local library** — import custom clips; SoundGrid stores them in the application data directory.
+- **Single executable** — NSIS installer and portable build via `electron-builder`.
 
 ### Supported audio formats
 
@@ -69,12 +51,12 @@ Import: **MP3, WAV, OGG/OGA, FLAC, M4A/AAC, OPUS, WebM-audio**.
 ## Tech stack
 
 - **Electron 33** — desktop shell
-- **Rust + CPAL/WASAPI** — native device I/O, mixing, passthrough, and meters
+- **Rust + CPAL/WASAPI** — native device I/O, mixing, passthrough, and metering
 - **Symphonia** — native clip decoding
-- **TypeScript** — end-to-end, strict
-- **Vite 6** — renderer dev server + build
-- **electron-builder** — Windows NSIS + portable packaging
-- **plain DOM** renderer — no framework, on purpose (small, fast, auditable)
+- **TypeScript** — end-to-end, strict mode
+- **Vite 6** — renderer dev server and build
+- **electron-builder** — Windows NSIS and portable packaging
+- **Plain DOM renderer** — intentionally framework-free for a small, fast, auditable codebase
 
 ## Project layout
 
@@ -101,19 +83,18 @@ soundgrid/
 └── vite.config.ts
 ```
 
-## Getting started (development)
+## Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-This launches Vite on `:5173` and starts Electron pointed at it. On first run,
-follow the in-app setup guide. It checks the cable, routing, and first import.
+This starts Vite on `:5173` and launches Electron against it. On first run, follow the in-app setup guide, which verifies the cable, routing, and first import.
 
-Useful scripts:
+### Scripts
 
-| Command                  | What it does                                    |
+| Command                  | Description                                     |
 | ------------------------ | ----------------------------------------------- |
 | `npm run dev`            | Vite + Electron, hot-reloading renderer         |
 | `npm run build`          | Build renderer + main into `dist/`              |
@@ -125,29 +106,20 @@ Useful scripts:
 | `npm run check`          | Type-check main + renderer                      |
 | `npm run format`         | Prettier write across the repo                  |
 
-## Building a Windows `.exe`
+## Building a Windows release
 
-Windows installers must be built on Windows (or CI). From a Windows machine:
+Windows installers must be built on Windows (or via CI). From a Windows machine:
 
 ```bash
 npm install
 npm run dist     # produces NSIS installer + portable exe in release/
 ```
 
-The distribution build downloads the original VB-CABLE 4.5 package from
-VB-Audio and verifies its pinned SHA-256 before bundling it unchanged. The
-SoundGrid installer launches VB-CABLE's supported silent-install mode; Windows
-still displays its required driver-consent prompt, then requires a restart.
-Settings retains a repair/retry action. VB-CABLE is separate donationware and
-is not covered by SoundGrid's MIT license.
+The distribution build downloads the original VB-CABLE 4.5 package from VB-Audio and verifies its pinned SHA-256 before bundling it unchanged. The SoundGrid installer invokes VB-CABLE's supported silent-install mode; Windows still presents its required driver-consent prompt, followed by a restart. Settings retains a repair/retry action. VB-CABLE is separate donationware and is not covered by SoundGrid's MIT license.
 
-The GitHub Actions release workflow also builds the installer on a clean
-Windows machine. Run **Build Windows installer** from the repository's Actions
-tab to get a downloadable artifact, or push a tag such as `v0.1.0` to attach
-the `.exe` directly to a GitHub Release.
+The GitHub Actions release workflow also builds the installer on a clean Windows machine. Run **Build Windows installer** from the repository's Actions tab to obtain a downloadable artifact, or push a tag such as `v0.1.0` to attach the executable directly to a GitHub Release.
 
-> macOS note: the native engine supports normal CoreAudio devices for
-> development, but the bundled virtual microphone installation is Windows-only.
+> **macOS note:** the native engine supports standard CoreAudio devices for development, but the bundled virtual microphone installation is Windows-only.
 
 ## Roadmap
 
@@ -160,8 +132,11 @@ the `.exe` directly to a GitHub Release.
 - [x] Guided first-run routing setup
 - [x] Automatic update download and install
 
-Hardware validation, code signing, and explicit public-redistribution confirmation
-from VB-Audio remain release gates. See [`ROADMAP.md`](ROADMAP.md).
+Hardware validation, code signing, and explicit public-redistribution confirmation from VB-Audio remain release gates. See [`ROADMAP.md`](ROADMAP.md).
+
+## Development methodology
+
+This project was developed with the assistance of AI coding tools. All code, design decisions, and documentation were produced through human-directed AI collaboration and reviewed by the project maintainer. The codebase is open for inspection and contribution under the terms of the MIT license.
 
 ## License
 
@@ -169,6 +144,4 @@ from VB-Audio remain release gates. See [`ROADMAP.md`](ROADMAP.md).
 
 ## Contributing
 
-Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting changes. Security,
-privacy, and troubleshooting guidance lives in [`SECURITY.md`](SECURITY.md),
-[`PRIVACY.md`](PRIVACY.md), and [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting changes. Security, privacy, and troubleshooting guidance are available in [`SECURITY.md`](SECURITY.md), [`PRIVACY.md`](PRIVACY.md), and [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
