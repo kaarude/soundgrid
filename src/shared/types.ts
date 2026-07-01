@@ -14,11 +14,27 @@ export interface SoundClip {
 }
 
 export type SoundClipPatch = Partial<
-  Pick<
-    SoundClip,
-    "name" | "favorite" | "hotkey" | "volume" | "loop" | "broadcast"
-  >
->;
+  Pick<SoundClip, "name" | "favorite" | "volume" | "loop" | "broadcast">
+> & {
+  // null explicitly clears a binding; an omitted field leaves it unchanged.
+  hotkey?: string | null;
+};
+
+export interface HotkeyRegistrationFailure {
+  id: string;
+  keys: string;
+  reason: "invalid" | "unavailable";
+}
+
+export interface HotkeyRegistrationResult {
+  registered: string[];
+  failures: HotkeyRegistrationFailure[];
+}
+
+export interface SoundClipUpdateResult {
+  clip: SoundClip;
+  hotkeys: HotkeyRegistrationResult;
+}
 
 export interface AudioDevices {
   micOutputs: AudioDevice[]; // virtual cables + playback devices we can route "mic" audio to

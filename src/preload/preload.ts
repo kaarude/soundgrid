@@ -4,9 +4,11 @@ import {
   AudioDevices,
   AudioEngineEvent,
   CableStatus,
+  HotkeyRegistrationResult,
   Settings,
   SoundClip,
   SoundClipPatch,
+  SoundClipUpdateResult,
 } from "../shared/types.js";
 
 // ---------------------------------------------------------------------------
@@ -22,7 +24,10 @@ export interface SoundGridApi {
   getLibrary: () => Promise<SoundClip[]>;
   importFiles: (paths: string[]) => Promise<SoundClip[]>;
   removeClip: (id: string) => Promise<void>;
-  updateClip: (id: string, patch: SoundClipPatch) => Promise<void>;
+  updateClip: (
+    id: string,
+    patch: SoundClipPatch,
+  ) => Promise<SoundClipUpdateResult>;
 
   // settings
   getSettings: () => Promise<Settings>;
@@ -54,7 +59,9 @@ export interface SoundGridApi {
   monitorSetVolume: (v: number) => Promise<void>;
 
   // hotkeys
-  registerHotkeys: (bindings: { id: string; keys: string }[]) => Promise<void>;
+  registerHotkeys: (
+    bindings: { id: string; keys: string }[],
+  ) => Promise<HotkeyRegistrationResult>;
   unregisterHotkeys: () => Promise<void>;
 
   // dialog helpers
@@ -75,8 +82,10 @@ contextBridge.exposeInMainWorld("soundgrid", {
 
   listDevices: () => ipcRenderer.invoke(IPC.DEVICES_LIST),
   onAudioEvent: (handler: (event: AudioEngineEvent) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, payload: AudioEngineEvent) =>
-      handler(payload);
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: AudioEngineEvent,
+    ) => handler(payload);
     ipcRenderer.on(IPC.ON_STATE, listener);
     return () => ipcRenderer.removeListener(IPC.ON_STATE, listener);
   },

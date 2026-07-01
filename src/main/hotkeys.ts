@@ -17,6 +17,7 @@
 // ---------------------------------------------------------------------------
 
 import { globalShortcut } from "electron";
+import { HotkeyRegistrationResult } from "../shared/types.js";
 
 export class HotkeyManager {
   private registered = new Set<string>();
@@ -24,16 +25,25 @@ export class HotkeyManager {
   registerAll(
     bindings: { id: string; keys: string }[],
     onFire: (id: string) => void,
-  ) {
+  ): HotkeyRegistrationResult {
     this.unregisterAll();
+    const failures: HotkeyRegistrationResult["failures"] = [];
     for (const { id, keys } of bindings) {
       if (!keys) continue;
       const accel = this.normalize(keys);
-      if (!accel) continue;
-      const ok = globalShortcut.register(accel, () => onFire(id));
-      if (ok) this.registered.add(accel);
+      if (!accel) {
+        failures.push({ id, keys, reason: "invalid" });
+        continue;
+      }
+      try {
+        const ok = globalShortcut.register(accel, () => onFire(id));
+        if (ok) this.registered.add(accel);
+        else failures.push({ id, keys, reason: "unavailable" });
+      } catch {
+        failures.push({ id, keys, reason: "invalid" });
+      }
     }
-    return [...this.registered];
+    return { registered: [...this.registered], failures };
   }
 
   unregisterAll() {
