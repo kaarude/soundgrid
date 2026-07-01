@@ -4,6 +4,7 @@ import { ClipGrid, syncClipGrid } from "./ClipGrid";
 import { SettingsDrawer, syncSettingsDrawer } from "./SettingsDrawer";
 import { TopBar, syncTopBar } from "./TopBar";
 import { syncBusMeter } from "./BusMeter";
+import { importDroppedAudioFiles } from "./library-actions";
 
 // SoundGrid main window — "The Cue Rack":
 //   top bus transport · collapsible cue rail · center clip grid.
@@ -18,6 +19,7 @@ export function App(): HTMLElement {
   body.append(Sidebar(), ClipGrid());
 
   el.append(TopBar(), body, SettingsDrawer());
+  installFileDrop(el);
 
   // subscribe once; re-sync the pieces that changed
   store.subscribe(() => {
@@ -34,7 +36,10 @@ export function App(): HTMLElement {
     if (event.type === "meter") {
       store.update({ micLevel: event.mic, monitorLevel: event.monitor });
     } else if (event.type === "clipEnded") {
-      if (event.bus === "mic" && store.state.micPlaying?.clipId === event.clipId) {
+      if (
+        event.bus === "mic" &&
+        store.state.micPlaying?.clipId === event.clipId
+      ) {
         store.update({ micPlaying: null });
       } else if (
         event.bus === "monitor" &&
@@ -74,6 +79,45 @@ export function App(): HTMLElement {
   return el;
 }
 
+function installFileDrop(app: HTMLElement): void {
+  const overlay = document.createElement("div");
+  overlay.className = "drop-overlay";
+  overlay.setAttribute("aria-hidden", "true");
+  overlay.innerHTML =
+    '<div class="drop-overlay-content"><strong>Drop audio to import</strong><span>Files keep their exact filenames</span></div>';
+  app.append(overlay);
+
+  let dragDepth = 0;
+  const hasFiles = (event: DragEvent) =>
+    Array.from(event.dataTransfer?.types ?? []).includes("Files");
+
+  app.addEventListener("dragenter", (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    dragDepth += 1;
+    app.classList.add("is-file-dragging");
+  });
+  app.addEventListener("dragover", (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  });
+  app.addEventListener("dragleave", (event) => {
+    if (!hasFiles(event)) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) app.classList.remove("is-file-dragging");
+  });
+  app.addEventListener("drop", (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    dragDepth = 0;
+    app.classList.remove("is-file-dragging");
+    if (event.dataTransfer?.files.length) {
+      void importDroppedAudioFiles(event.dataTransfer.files);
+    }
+  });
+}
+
 async function boot(): Promise<void> {
   const [clips, settings] = await Promise.all([
     window.soundgrid.getLibrary(),
@@ -99,7 +143,11 @@ async function boot(): Promise<void> {
 async function refreshDevices(): Promise<void> {
   try {
     const native = await window.soundgrid.listDevices();
-    if (native.micOutputs.length || native.monitors.length || native.realMics.length) {
+    if (
+      native.micOutputs.length ||
+      native.monitors.length ||
+      native.realMics.length
+    ) {
       store.update({ devicesStatus: "ready", devices: native });
       return;
     }

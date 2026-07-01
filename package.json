@@ -22,6 +22,7 @@
     "dist:mac": "npm run build:native && npm run build && electron-builder -m",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html,md}\"",
     "check": "tsc -p tsconfig.electron.json --noEmit && tsc -p src/renderer/tsconfig.json --noEmit",
+    "test": "vitest run --config vitest.config.ts",
     "lint": "echo \"(lint) add eslint if desired\""
   },
   "devDependencies": {
@@ -33,6 +34,7 @@
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
+    "vitest": "^4.1.9",
     "wait-on": "^8.0.1"
   }
 }

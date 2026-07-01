@@ -9,6 +9,7 @@ import {
   Settings,
   SoundClip,
 } from "../shared/types.js";
+import { clipBuses } from "../shared/routing.js";
 
 type Bus = "mic" | "monitor";
 
@@ -52,7 +53,10 @@ export class AudioEngine {
       });
       this.process = child;
       const timeout = setTimeout(() => {
-        this.emit({ type: "error", message: "Native audio engine startup timed out." });
+        this.emit({
+          type: "error",
+          message: "Native audio engine startup timed out.",
+        });
         resolve();
       }, 5_000);
 
@@ -61,7 +65,10 @@ export class AudioEngine {
         try {
           event = JSON.parse(line) as NativeEvent;
         } catch {
-          this.emit({ type: "error", message: `Invalid native audio response: ${line}` });
+          this.emit({
+            type: "error",
+            message: `Invalid native audio response: ${line}`,
+          });
           return;
         }
         if (event.type === "ready" && !this.ready) {
@@ -77,7 +84,10 @@ export class AudioEngine {
       });
       child.on("error", (error) => {
         clearTimeout(timeout);
-        this.emit({ type: "error", message: `Cannot start audio engine: ${error.message}` });
+        this.emit({
+          type: "error",
+          message: `Cannot start audio engine: ${error.message}`,
+        });
         resolve();
       });
       child.on("exit", (code, signal) => {
@@ -117,7 +127,8 @@ export class AudioEngine {
   applySettings(settings: Settings): void {
     const previous = this.currentSettings;
     this.currentSettings = settings;
-    if (!previous || routingChanged(previous, settings)) this.configure(settings);
+    if (!previous || routingChanged(previous, settings))
+      this.configure(settings);
     else {
       this.setMicVolume(settings.masterMicVolume);
       this.setMonitorVolume(settings.monitorVolume);
@@ -127,9 +138,9 @@ export class AudioEngine {
   async playBoth(clip: SoundClip | undefined): Promise<void> {
     if (!clip) return;
     const settings = this.currentSettings;
-    const jobs: Promise<void>[] = [];
-    if (clip.broadcast) jobs.push(this.playToMic(clip));
-    if (!settings?.micOnly) jobs.push(this.playToMonitor(clip));
+    const jobs = clipBuses(clip, settings?.micOnly ?? false).map((bus) =>
+      bus === "mic" ? this.playToMic(clip) : this.playToMonitor(clip),
+    );
     await Promise.all(jobs);
   }
 
@@ -266,12 +277,29 @@ export class AudioEngine {
 }
 
 function findNativeExecutable(): string | undefined {
-  const filename = process.platform === "win32" ? "soundgrid-audio.exe" : "soundgrid-audio";
+  const filename =
+    process.platform === "win32" ? "soundgrid-audio.exe" : "soundgrid-audio";
   const candidates = [
     process.env.SOUNDGRID_AUDIO_ENGINE,
-    app.isPackaged ? path.join(process.resourcesPath, "native", filename) : undefined,
-    path.join(app.getAppPath(), "native", "audio-engine", "target", "release", filename),
-    path.join(app.getAppPath(), "native", "audio-engine", "target", "debug", filename),
+    app.isPackaged
+      ? path.join(process.resourcesPath, "native", filename)
+      : undefined,
+    path.join(
+      app.getAppPath(),
+      "native",
+      "audio-engine",
+      "target",
+      "release",
+      filename,
+    ),
+    path.join(
+      app.getAppPath(),
+      "native",
+      "audio-engine",
+      "target",
+      "debug",
+      filename,
+    ),
   ].filter((value): value is string => Boolean(value));
   return candidates.find(existsSync);
 }

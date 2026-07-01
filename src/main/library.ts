@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { LibraryFile, SoundClip, SoundClipPatch } from "../shared/types.js";
 
 const SUPPORTED = new Set([
+  ".aif",
+  ".aiff",
   ".mp3",
   ".wav",
   ".ogg",
@@ -13,6 +15,8 @@ const SUPPORTED = new Set([
   ".aac",
   ".opus",
   ".webm",
+  ".caf",
+  ".mp4",
 ]);
 
 function isSupported(file: string): boolean {
@@ -54,7 +58,9 @@ export class LibraryStore {
       await fs.copyFile(file, dest);
       const clip: SoundClip = {
         id,
-        name: path.basename(file, ext),
+        // Keep the source filename verbatim. The editable display name is
+        // intentionally independent from the UUID-based library copy.
+        name: path.basename(file),
         filePath: dest,
         favorite: false,
         volume: 1,
@@ -82,12 +88,13 @@ export class LibraryStore {
     await this.persist();
   }
 
-  async updateClip(id: string, patch: SoundClipPatch) {
+  async updateClip(id: string, patch: SoundClipPatch): Promise<SoundClip> {
     const clip = this.clips.find((c) => c.id === id);
-    if (!clip) return;
+    if (!clip) throw new Error(`Clip not found: ${id}`);
     const next = sanitizeClipPatch(patch);
     Object.assign(clip, next);
     await this.persist();
+    return { ...clip };
   }
 
   private async persist() {
@@ -127,12 +134,20 @@ function normalizeClip(clip: SoundClip): SoundClip {
   };
 }
 
-function sanitizeClipPatch(patch: SoundClipPatch): SoundClipPatch {
+export function sanitizeClipPatch(patch: SoundClipPatch): SoundClipPatch {
   const next: SoundClipPatch = {};
-  if (typeof patch.name === "string") next.name = patch.name.slice(0, 120);
+  if (typeof patch.name === "string") {
+    const name = patch.name.trim().slice(0, 120);
+    if (!name) throw new Error("Clip name cannot be empty.");
+    next.name = name;
+  }
   if (typeof patch.favorite === "boolean") next.favorite = patch.favorite;
-  if (typeof patch.hotkey === "string") next.hotkey = patch.hotkey.slice(0, 80);
-  else if (patch.hotkey === undefined) next.hotkey = undefined;
+  if (Object.prototype.hasOwnProperty.call(patch, "hotkey")) {
+    if (patch.hotkey === null || patch.hotkey === "") next.hotkey = undefined;
+    else if (typeof patch.hotkey === "string") {
+      next.hotkey = patch.hotkey.trim().slice(0, 80) || undefined;
+    }
+  }
   if (typeof patch.volume === "number") next.volume = clamp01(patch.volume);
   if (typeof patch.loop === "boolean") next.loop = patch.loop;
   if (typeof patch.broadcast === "boolean") next.broadcast = patch.broadcast;

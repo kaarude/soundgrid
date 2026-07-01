@@ -27,7 +27,7 @@
           favorite: false,
           volume: 1,
           loop: true,
-          broadcast: true,
+          broadcast: false,
         },
         {
           id: "3",
@@ -104,7 +104,18 @@
         getLibrary: async () => (empty ? [] : SAMPLE),
         importFiles: async (files) => [],
         removeClip: async (id) => {},
-        updateClip: async (id, patch) => {},
+        updateClip: async (id, patch) => {
+          const clip = SAMPLE.find((item) => item.id === id);
+          if (clip) {
+            const next = { ...patch };
+            if (next.hotkey === null) delete next.hotkey;
+            Object.assign(clip, next);
+          }
+          return {
+            clip: { ...clip },
+            hotkeys: { registered: [], failures: [] },
+          };
+        },
         getSettings: async () => previewSettings,
         setSettings: async (patch) => Object.assign(previewSettings, patch),
         listDevices: async () => ({
@@ -144,7 +155,7 @@
         monitorStop: noop,
         monitorSetMute: noop,
         monitorSetVolume: noop,
-        registerHotkeys: noop,
+        registerHotkeys: async () => ({ registered: [], failures: [] }),
         unregisterHotkeys: noop,
         pickAudioFiles: async () => [],
       };

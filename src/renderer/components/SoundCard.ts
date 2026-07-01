@@ -1,6 +1,13 @@
 import { SoundClip, SoundClipPatch } from "../../shared/types";
 import { icon } from "./icons";
 import { store } from "./store";
+import {
+  captureHotkey,
+  findHotkeyConflict,
+  formatHotkey,
+  normalizeAccelerator,
+  validateAccelerator,
+} from "./hotkey-utils";
 
 // A single clip card — the firing surface. The main play action hits both
 // buses; the Mic and Preview buttons remain route-specific controls.
@@ -9,9 +16,11 @@ import { store } from "./store";
 export function SoundCard(clip: SoundClip): HTMLElement {
   const card = document.createElement("article");
   card.className = "card";
+  card.dataset.clipId = clip.id;
   card.tabIndex = 0;
-  card.setAttribute("aria-label", `${clip.name}. Fire to mic and monitor`);
-  card.title = "Fire to mic and monitor";
+  const routeLabel = clip.broadcast ? "mic and monitor" : "monitor only";
+  card.setAttribute("aria-label", `${clip.name}. Fire to ${routeLabel}`);
+  card.title = `Fire to ${routeLabel}`;
   card.addEventListener("click", () => fireBoth(clip, card));
   card.addEventListener("keydown", (event) => {
     if (event.target !== card) return;
@@ -37,9 +46,11 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   favorite.addEventListener("click", async (event) => {
     event.stopPropagation();
     const next = !clip.favorite;
-    await window.soundgrid.updateClip(clip.id, { favorite: next });
+    const result = await window.soundgrid.updateClip(clip.id, {
+      favorite: next,
+    });
     const clips = store.state.clips.map((item) =>
-      item.id === clip.id ? { ...item, favorite: next } : item,
+      item.id === clip.id ? result.clip : item,
     );
     const hasFavorites = clips.some((item) => item.favorite);
     store.update({
@@ -52,7 +63,10 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   metadata.className = "card-meta";
   const both = document.createElement("span");
   both.className = "route-badge";
-  both.textContent = "Card: both";
+  both.classList.add(
+    clip.broadcast ? "route-badge--broadcast" : "route-badge--monitor",
+  );
+  both.textContent = clip.broadcast ? "Mic + monitor" : "Monitor only";
   metadata.append(both);
   if (clip.hotkey) {
     const hotkey = document.createElement("kbd");
@@ -69,6 +83,8 @@ export function SoundCard(clip: SoundClip): HTMLElement {
   micBtn.type = "button";
   micBtn.className = "card-btn card-btn--mic";
   micBtn.title = "Play to mic (broadcast)";
+  micBtn.disabled = !clip.broadcast;
+  if (!clip.broadcast) micBtn.title = "Monitor-only clips cannot be broadcast";
   micBtn.append(icon.mic());
   const micLabel = document.createElement("span");
   micLabel.textContent = "Mic";
@@ -134,16 +150,25 @@ export function SoundCard(clip: SoundClip): HTMLElement {
 function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
   const form = document.createElement("form");
   form.className = "clip-menu";
+  form.setAttribute("aria-label", `Settings for ${clip.name}`);
   form.addEventListener("click", (event) => event.stopPropagation());
 
   const name = textField("Name", clip.name);
   const hotkey = textField("Hotkey", clip.hotkey ?? "");
   hotkey.input.placeholder = "Click, then press keys";
   hotkey.input.readOnly = true;
+  hotkey.input.setAttribute("aria-describedby", `hotkey-help-${clip.id}`);
   hotkey.input.addEventListener("keydown", (event) => {
     event.preventDefault();
-    hotkey.input.value = normalizeHotkeyEvent(event);
+    event.stopPropagation();
+    hotkey.input.value = captureHotkey(event);
+    error.textContent = "";
   });
+  const hotkeyHelp = document.createElement("span");
+  hotkeyHelp.id = `hotkey-help-${clip.id}`;
+  hotkeyHelp.className = "clip-field-help";
+  hotkeyHelp.textContent = "Press a shortcut. Backspace or Escape clears it.";
+  hotkey.label.append(hotkeyHelp);
 
   const volume = document.createElement("label");
   volume.className = "clip-field clip-field--volume";
@@ -180,8 +205,33 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
   loopText.textContent = "Loop";
   loop.append(loopInput, loopBox, loopText);
 
+  const route = document.createElement("fieldset");
+  route.className = "clip-route";
+  const routeLegend = document.createElement("legend");
+  routeLegend.textContent = "Default route";
+  const routeOptions = document.createElement("div");
+  routeOptions.className = "clip-route-options";
+  const broadcastRoute = routeOption(
+    `route-broadcast-${clip.id}`,
+    "Broadcast + monitor",
+    "Mic and headphones",
+    true,
+    clip.broadcast,
+  );
+  const monitorRoute = routeOption(
+    `route-monitor-${clip.id}`,
+    "Monitor only",
+    "Headphones only",
+    false,
+    !clip.broadcast,
+  );
+  routeOptions.append(broadcastRoute.label, monitorRoute.label);
+  route.append(routeLegend, routeOptions);
+
   const error = document.createElement("div");
   error.className = "clip-menu-error";
+  error.setAttribute("role", "status");
+  error.setAttribute("aria-live", "polite");
 
   const footer = document.createElement("div");
   footer.className = "clip-menu-actions";
@@ -190,10 +240,16 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
   remove.className = "clip-menu-remove";
   remove.append(icon.trash(), document.createTextNode("Remove"));
   remove.addEventListener("click", async () => {
-    await window.soundgrid.removeClip(clip.id);
-    store.update({
-      clips: store.state.clips.filter((item) => item.id !== clip.id),
-    });
+    setFormPending(form, true);
+    try {
+      await window.soundgrid.removeClip(clip.id);
+      store.update({
+        clips: store.state.clips.filter((item) => item.id !== clip.id),
+      });
+    } catch (cause) {
+      error.textContent = errorMessage(cause, "Could not remove this clip.");
+      setFormPending(form, false);
+    }
   });
   const save = document.createElement("button");
   save.type = "submit";
@@ -203,30 +259,105 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    error.textContent = "";
     const normalizedHotkey = normalizeAccelerator(hotkey.input.value);
-    const conflict = findHotkeyConflict(clip.id, normalizedHotkey);
+    const invalid = validateAccelerator(normalizedHotkey);
+    if (invalid) {
+      error.textContent = invalid;
+      hotkey.input.focus();
+      return;
+    }
+    const conflict = findHotkeyConflict(
+      clip.id,
+      normalizedHotkey,
+      store.state.clips,
+      store.state.settings,
+    );
     if (conflict) {
       error.textContent = `Hotkey already used by ${conflict}.`;
+      hotkey.input.focus();
       return;
     }
 
     const patch: SoundClipPatch = {
-      name: name.input.value.trim() || clip.name,
-      hotkey: normalizedHotkey || undefined,
+      name: name.input.value,
+      hotkey: normalizedHotkey || null,
       volume: Number(volumeInput.value) / 100,
       loop: loopInput.checked,
+      broadcast: broadcastRoute.input.checked,
     };
-    await window.soundgrid.updateClip(clip.id, patch);
-    store.update({
-      clips: store.state.clips.map((item) =>
-        item.id === clip.id ? { ...item, ...patch } : item,
-      ),
-    });
-    closeMenu(card);
+    setFormPending(form, true);
+    try {
+      const result = await window.soundgrid.updateClip(clip.id, patch);
+      const failed = result.hotkeys.failures.find(
+        (item) => item.id === clip.id,
+      );
+      if (failed) {
+        const message =
+          failed.reason === "unavailable"
+            ? "Saved, but Windows or another app already owns this shortcut."
+            : "Saved, but Electron does not support this shortcut.";
+        store.update({
+          clips: store.state.clips.map((item) =>
+            item.id === clip.id ? result.clip : item,
+          ),
+        });
+        reopenMenuWithError(clip.id, message);
+        return;
+      }
+      store.update({
+        clips: store.state.clips.map((item) =>
+          item.id === clip.id ? result.clip : item,
+        ),
+      });
+      closeMenu(card, true);
+    } catch (cause) {
+      error.textContent = errorMessage(cause, "Could not save clip settings.");
+      setFormPending(form, false);
+    }
   });
 
-  form.append(name.label, hotkey.label, volume, loop, error, footer);
+  form.append(name.label, hotkey.label, volume, loop, route, error, footer);
   return form;
+}
+
+function reopenMenuWithError(clipId: string, message: string): void {
+  const card = Array.from(
+    document.querySelectorAll<HTMLElement>(".card[data-clip-id]"),
+  ).find((item) => item.dataset.clipId === clipId);
+  const trigger = card?.querySelector<HTMLButtonElement>(".card-menu");
+  trigger?.click();
+
+  const menu = card?.querySelector<HTMLFormElement>(".clip-menu");
+  const error = menu?.querySelector<HTMLElement>(".clip-menu-error");
+  if (error) error.textContent = message;
+  menu?.querySelector<HTMLInputElement>("input[readonly]")?.focus();
+}
+
+function routeOption(
+  id: string,
+  title: string,
+  description: string,
+  value: boolean,
+  checked: boolean,
+) {
+  const label = document.createElement("label");
+  label.className = "clip-route-option";
+  label.htmlFor = id;
+  const input = document.createElement("input");
+  input.id = id;
+  input.type = "radio";
+  input.name = `route-${id.split("-").at(-1)}`;
+  input.value = String(value);
+  input.checked = checked;
+  const copy = document.createElement("span");
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  const detail = document.createElement("small");
+  detail.textContent = description;
+  copy.append(heading, detail);
+  label.append(input, copy);
+  return { label, input };
 }
 
 function textField(labelText: string, value: string) {
@@ -249,12 +380,13 @@ function closeOtherMenus(card: HTMLElement) {
   }
 }
 
-function closeMenu(card: HTMLElement) {
+function closeMenu(card: HTMLElement, restoreFocus = false) {
   card.classList.remove("is-menu-open");
   const menu = card.querySelector<HTMLElement>(".clip-menu");
   const trigger = card.querySelector<HTMLButtonElement>(".card-menu");
   menu?.classList.remove("is-positioned");
   trigger?.setAttribute("aria-expanded", "false");
+  if (restoreFocus) trigger?.focus();
 }
 
 function positionMenu(card: HTMLElement, anchor: HTMLElement) {
@@ -300,98 +432,32 @@ async function fireBoth(clip: SoundClip, source?: HTMLElement): Promise<void> {
   if (source) void source.offsetWidth;
   source?.classList.add("is-firing");
   await window.soundgrid.playBoth(clip.id);
-  store.update({
-    micPlaying: { clipId: clip.id, name: clip.name, paused: false },
-    monitorPlaying: { clipId: clip.id, name: clip.name, paused: false },
-    micMuted: false,
-  });
 }
 
 async function fireMic(clip: SoundClip): Promise<void> {
   await window.soundgrid.micPlay(clip.id);
-  store.update({
-    micPlaying: { clipId: clip.id, name: clip.name, paused: false },
-    micMuted: false,
-  });
 }
 
 async function firePreview(clip: SoundClip): Promise<void> {
   await window.soundgrid.monitorPlay(clip.id);
-  store.update({
-    monitorPlaying: { clipId: clip.id, name: clip.name, paused: false },
-  });
 }
 
-function normalizeHotkeyEvent(event: KeyboardEvent): string {
-  if (event.key === "Escape" || event.key === "Backspace") return "";
-  const parts: string[] = [];
-  if (event.ctrlKey || event.metaKey) parts.push("CommandOrControl");
-  if (event.altKey) parts.push("Alt");
-  if (event.shiftKey) parts.push("Shift");
-
-  const key = normalizeKey(event.key);
-  if (key && !["CommandOrControl", "Alt", "Shift"].includes(key)) {
-    parts.push(key);
+function setFormPending(form: HTMLFormElement, pending: boolean): void {
+  form.setAttribute("aria-busy", String(pending));
+  const save = form.querySelector<HTMLButtonElement>(".clip-menu-save");
+  if (save) save.textContent = pending ? "Saving…" : "Save";
+  for (const control of form.elements) {
+    if (
+      control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement
+    ) {
+      control.disabled = pending;
+    }
   }
-  return [...new Set(parts)].join("+");
 }
 
-function normalizeAccelerator(value: string): string {
-  return value
-    .split("+")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      if (/^(ctrl|control|cmd|command|meta)$/i.test(part)) {
-        return "CommandOrControl";
-      }
-      if (/^option$/i.test(part)) return "Alt";
-      if (/^esc$/i.test(part)) return "Escape";
-      if (part.length === 1) return part.toUpperCase();
-      return part[0].toUpperCase() + part.slice(1);
-    })
-    .join("+");
-}
-
-function formatHotkey(value: string): string {
-  return value
-    .replace(
-      "CommandOrControl",
-      navigator.platform.includes("Mac") ? "Cmd" : "Ctrl",
-    )
-    .replaceAll("+", " + ");
-}
-
-function normalizeKey(key: string): string {
-  if (/^[a-z0-9]$/i.test(key)) return key.toUpperCase();
-  if (key === " ") return "Space";
-  const aliases: Record<string, string> = {
-    ArrowUp: "Up",
-    ArrowDown: "Down",
-    ArrowLeft: "Left",
-    ArrowRight: "Right",
-    Control: "CommandOrControl",
-    Meta: "CommandOrControl",
-    Alt: "Alt",
-    Shift: "Shift",
-    Escape: "Escape",
-  };
-  return aliases[key] ?? key;
-}
-
-function findHotkeyConflict(clipId: string, hotkey: string): string | null {
-  if (!hotkey) return null;
-  const normalized = hotkey.toLowerCase();
-  if (store.state.settings.stopAllHotkey?.toLowerCase() === normalized) {
-    return "Stop all";
-  }
-  if (store.state.settings.micMuteHotkey?.toLowerCase() === normalized) {
-    return "Mic mute";
-  }
-  const duplicate = store.state.clips.find(
-    (clip) => clip.id !== clipId && clip.hotkey?.toLowerCase() === normalized,
-  );
-  return duplicate?.name ?? null;
+function errorMessage(cause: unknown, fallback: string): string {
+  return cause instanceof Error && cause.message ? cause.message : fallback;
 }
 
 document.addEventListener("click", () => {
@@ -400,6 +466,14 @@ document.addEventListener("click", () => {
   )) {
     closeMenu(open);
   }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const open = document.querySelector<HTMLElement>(".card.is-menu-open");
+  if (!open) return;
+  event.preventDefault();
+  closeMenu(open, true);
 });
 
 window.addEventListener("resize", () => {

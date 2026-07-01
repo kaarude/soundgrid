@@ -54,7 +54,7 @@ The app is a real UI over a stubbed audio engine. Phase 0 replaces the stub with
 
 The UI is present but several controls are not yet wired to real behavior. Phase 1 makes every visible affordance functional.
 
-### 1.1 Per-clip settings
+### 1.1 Per-clip settings ✅
 
 - **Description:** Editable per clip: rename, favorite, hotkey binding, per-clip volume, loop toggle, and a broadcast vs monitor-only flag. Expose these inline on a clip (an "edit" affordance) and persist to the library index.
 - **Goal:** Each clip is fully configurable without touching global settings; monitor-only clips can be previewed without ever reaching the mic.

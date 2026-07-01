@@ -16,6 +16,7 @@ import {
   Settings,
   SoundClip,
   SoundClipPatch,
+  HotkeyRegistrationResult,
 } from "../shared/types.js";
 import { LibraryStore } from "./library.js";
 import { SettingsStore } from "./settings.js";
@@ -149,8 +150,18 @@ class SoundGrid {
     ipcMain.handle(
       IPC.LIBRARY_UPDATE_CLIP,
       async (_e, id: string, patch: SoundClipPatch) => {
-        await this.library.updateClip(id, patch);
-        this.registerPersistedHotkeys();
+        const previousHotkey = this.library.byId(id)?.hotkey;
+        const clip = await this.library.updateClip(id, patch);
+        const hotkeys = this.registerPersistedHotkeys();
+        const failed = hotkeys.failures.some((item) => item.id === id);
+        if (failed && Object.prototype.hasOwnProperty.call(patch, "hotkey")) {
+          const reverted = await this.library.updateClip(id, {
+            hotkey: previousHotkey ?? null,
+          });
+          this.registerPersistedHotkeys();
+          return { clip: reverted, hotkeys };
+        }
+        return { clip, hotkeys };
       },
     );
 
@@ -224,6 +235,8 @@ class SoundGrid {
           {
             name: "Audio",
             extensions: [
+              "aif",
+              "aiff",
               "mp3",
               "wav",
               "ogg",
@@ -233,6 +246,8 @@ class SoundGrid {
               "aac",
               "opus",
               "webm",
+              "caf",
+              "mp4",
             ],
           },
         ],
@@ -242,7 +257,7 @@ class SoundGrid {
     });
   }
 
-  private registerPersistedHotkeys() {
+  private registerPersistedHotkeys(): HotkeyRegistrationResult {
     const settings = this.settings.get();
     const bindings = [
       settings.stopAllHotkey
@@ -267,7 +282,7 @@ class SoundGrid {
       return true;
     });
 
-    this.hotkeys.registerAll(unique, (id) => {
+    return this.hotkeys.registerAll(unique, (id) => {
       if (id === "__stop_all__") return this.audio.stopAll();
       if (id === "__mic_mute__") return this.audio.toggleMicMute();
       return this.audio.playBoth(this.library.byId(id));
