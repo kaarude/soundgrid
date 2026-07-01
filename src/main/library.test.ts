@@ -31,6 +31,22 @@ describe("sanitizeClipPatch", () => {
 });
 
 describe("LibraryStore", () => {
+  it("uses the exact source filename, including its extension, as the sound name", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
+    roots.push(root);
+    const sounds = path.join(root, "sounds");
+    const db = path.join(root, "library.json");
+    const source = path.join(root, "My.Sound Effect.WAV");
+    await mkdir(sounds);
+    await writeFile(source, "audio fixture");
+
+    const store = new LibraryStore();
+    await store.init(db, sounds);
+    const [clip] = await store.importFiles([source]);
+
+    expect(clip.name).toBe("My.Sound Effect.WAV");
+  });
+
   it("normalizes legacy clips and persists unrelated updates without losing hotkeys", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
     roots.push(root);

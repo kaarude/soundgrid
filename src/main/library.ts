@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { LibraryFile, SoundClip, SoundClipPatch } from "../shared/types.js";
 
 const SUPPORTED = new Set([
+  ".aif",
+  ".aiff",
   ".mp3",
   ".wav",
   ".ogg",
@@ -13,6 +15,8 @@ const SUPPORTED = new Set([
   ".aac",
   ".opus",
   ".webm",
+  ".caf",
+  ".mp4",
 ]);
 
 function isSupported(file: string): boolean {
@@ -54,7 +58,9 @@ export class LibraryStore {
       await fs.copyFile(file, dest);
       const clip: SoundClip = {
         id,
-        name: path.basename(file, ext),
+        // Keep the source filename verbatim. The editable display name is
+        // intentionally independent from the UUID-based library copy.
+        name: path.basename(file),
         filePath: dest,
         favorite: false,
         volume: 1,

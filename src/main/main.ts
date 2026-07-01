@@ -235,6 +235,8 @@ class SoundGrid {
           {
             name: "Audio",
             extensions: [
+              "aif",
+              "aiff",
               "mp3",
               "wav",
               "ogg",
@@ -244,6 +246,8 @@ class SoundGrid {
               "aac",
               "opus",
               "webm",
+              "caf",
+              "mp4",
             ],
           },
         ],

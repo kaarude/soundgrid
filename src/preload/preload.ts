@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { IPC } from "../shared/ipc.js";
 import {
   AudioDevices,
@@ -66,6 +66,7 @@ export interface SoundGridApi {
 
   // dialog helpers
   pickAudioFiles: () => Promise<string[]>;
+  getPathForFile: (file: File) => string;
 }
 
 contextBridge.exposeInMainWorld("soundgrid", {
@@ -116,4 +117,5 @@ contextBridge.exposeInMainWorld("soundgrid", {
   unregisterHotkeys: () => ipcRenderer.invoke(IPC.HOTKEYS_UNREGISTER),
 
   pickAudioFiles: () => ipcRenderer.invoke("dialog:openAudio"),
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 } satisfies SoundGridApi);
