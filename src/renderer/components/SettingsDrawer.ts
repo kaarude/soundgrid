@@ -7,6 +7,11 @@ import {
   normalizeAccelerator,
   validateAccelerator,
 } from "./hotkey-utils";
+import {
+  reconcileAudioRouting,
+  routeIsAvailable,
+  selectableMonitorDevices,
+} from "../../shared/routing";
 
 // Settings drawer, opened from the topbar gear. Routing + toggles.
 // This is the control surface — calm, labeled, instrument-precise.
@@ -113,11 +118,7 @@ function renderSettingsBody(): void {
 
   const s = store.state.settings;
   const d = store.state.devices;
-  const monitorDevices = s.headsetOnly
-    ? d.monitors.filter((device) =>
-        /head(phone|set)|earbud|airpod/i.test(device.label),
-      )
-    : d.monitors;
+  const monitorDevices = selectableMonitorDevices(d, s);
 
   const routing = group("Routing");
   routing.append(deviceSummary());
@@ -396,13 +397,16 @@ function toggleField(
       const currentMonitor = store.state.devices.monitors.find(
         (device) => device.id === store.state.settings.monitorDeviceId,
       );
-      const safeMonitor =
-        currentMonitor &&
-        /head(phone|set)|earbud|airpod/i.test(currentMonitor.label);
       void persistSettings({
         headsetOnly: true,
         micOnly: false,
-        monitorDeviceId: safeMonitor ? currentMonitor.id : null,
+        monitorDeviceId:
+          currentMonitor &&
+          selectableMonitorDevices(store.state.devices, {
+            headsetOnly: true,
+          }).some((device) => device.id === currentMonitor.id)
+            ? currentMonitor.id
+            : null,
       });
     } else {
       void persistSetting(key, next);
@@ -458,6 +462,14 @@ async function persistSettings(patch: Partial<Settings>): Promise<void> {
   try {
     const result = await window.soundgrid.setSettings(patch);
     store.update({ settings: result.settings });
+    const routingPatch = reconcileAudioRouting(
+      result.settings,
+      store.state.devices,
+    );
+    if (Object.keys(routingPatch).length) {
+      const routed = await window.soundgrid.setSettings(routingPatch);
+      store.update({ settings: routed.settings });
+    }
     setSaveStatus("saved", "Saved");
   } catch {
     setSaveStatus("error", "Could not save. Try again.");
@@ -467,17 +479,11 @@ async function persistSettings(patch: Partial<Settings>): Promise<void> {
 function deviceSummary(): HTMLElement {
   const summary = document.createElement("div");
   const { settings, devices, devicesStatus } = store.state;
-  const routeIsAvailable = (selected: string | null, list: AudioDevice[]) =>
-    Boolean(selected && list.some((device) => device.id === selected));
   const routingComplete =
     routeIsAvailable(settings.micOutputDeviceId, devices.micOutputs) &&
     routeIsAvailable(
       settings.monitorDeviceId,
-      settings.headsetOnly
-        ? devices.monitors.filter((device) =>
-            /head(phone|set)|earbud|airpod/i.test(device.label),
-          )
-        : devices.monitors,
+      selectableMonitorDevices(devices, settings),
     ) &&
     (!settings.passthrough ||
       routeIsAvailable(settings.realMicDeviceId, devices.realMics));

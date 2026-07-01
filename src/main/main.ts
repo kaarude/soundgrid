@@ -57,6 +57,9 @@ class SoundGrid {
       this.win?.webContents.send(IPC.LIBRARY_CHANGED, clips),
     );
     await this.settings.init(path.join(userDataDir, "settings.json"));
+    app.setLoginItemSettings({
+      openAtLogin: this.settings.get().runOnStartup,
+    });
 
     this.audio.onEvent((event) => this.onAudioEvent(event));
     await this.audio.start(this.settings.get());
