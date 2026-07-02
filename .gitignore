@@ -10,3 +10,4 @@ vendor/vb-cable/*.zip
 shots/
 .playwright-cli/
 .impeccable/
+.commandcode/
