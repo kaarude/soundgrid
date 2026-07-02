@@ -103,7 +103,7 @@
       };
       window.soundgrid = {
         getLibrary: async () => (empty ? [] : SAMPLE),
-        importFiles: async (files) => [],
+        importFiles: async (files) => ({ added: [], skipped: [] }),
         removeClip: async (id) => {},
         updateClip: async (id, patch) => {
           const clip = SAMPLE.find((item) => item.id === id);
@@ -146,6 +146,10 @@
             "Installation finished. Restart Windows before using VB-CABLE.",
         }),
         openCableDonation: noop,
+        getUpdateState: async () => ({ status: "unavailable" }),
+        downloadUpdate: noop,
+        installUpdate: noop,
+        onUpdateState: () => () => {},
         playBoth: noop,
         micPlay: noop,
         micPause: noop,

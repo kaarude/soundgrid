@@ -7,6 +7,7 @@ import {
   DEFAULT_SETTINGS,
   Settings,
   SoundClip,
+  UpdateState,
 } from "../../shared/types";
 
 export interface NowPlaying {
@@ -41,6 +42,7 @@ export interface State {
   audioError: string | null;
   cableStatus: CableStatus | null;
   cableInstalling: boolean;
+  updateState: UpdateState;
   // ui
   settingsOpen: boolean;
 }
@@ -91,5 +93,6 @@ export const store = new Store({
   audioError: null,
   cableStatus: null,
   cableInstalling: false,
+  updateState: { status: "idle" },
   settingsOpen: false,
 });

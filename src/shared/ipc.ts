@@ -22,6 +22,12 @@ export const IPC = {
   CABLE_INSTALL: "cable:install",
   CABLE_DONATE: "cable:donate",
 
+  // Application updates
+  UPDATE_GET_STATE: "update:getState",
+  UPDATE_DOWNLOAD: "update:download",
+  UPDATE_INSTALL: "update:install",
+  UPDATE_STATE: "update:state",
+
   // Audio transport (mic output bus)
   PLAY_BOTH: "audio:playBoth",
   MIC_PLAY: "mic:play",

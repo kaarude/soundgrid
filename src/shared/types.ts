@@ -12,7 +12,7 @@ export interface SoundClip {
   loop: boolean;
   broadcast: boolean; // sent to mic output when true; monitor-only when false
   missing?: boolean; // source copy disappeared from the managed library
-  hash?: string; // content hash used to relink a renamed file in place
+  contentHash?: string; // SHA-256 of the managed audio, used for duplicate detection and relink
 }
 
 export type SoundClipPatch = Partial<
@@ -68,7 +68,16 @@ export interface AudioDevices {
 export interface AudioDevice {
   id: string;
   label: string;
+  kind?:
+    "headphones" | "headset" | "speaker" | "microphone" | "virtual" | "unknown";
 }
+
+export type UpdateState =
+  | { status: "idle" | "checking" | "unavailable" }
+  | { status: "available"; version: string }
+  | { status: "downloading"; version: string; percent: number }
+  | { status: "downloaded"; version: string }
+  | { status: "error"; message: string };
 
 export type AudioEngineEvent =
   | { type: "meter"; mic: number; monitor: number }

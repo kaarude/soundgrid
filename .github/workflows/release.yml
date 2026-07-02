@@ -41,8 +41,16 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Check native audio engine
-        run: cargo check --locked --manifest-path native/audio-engine/Cargo.toml
+      - name: Test native audio engine
+        run: cargo test --locked --manifest-path native/audio-engine/Cargo.toml
+
+      - name: Build application for smoke test
+        run: |
+          pnpm build:native
+          pnpm build
+
+      - name: Smoke-test sandboxed Electron startup
+        run: pnpm test:smoke
 
       - name: Build installer
         run: pnpm dist:installer

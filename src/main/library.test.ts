@@ -81,6 +81,26 @@ describe("LibraryStore", () => {
     ]);
   });
 
+  it("rejects the same audio content across later imports and different paths", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
+    roots.push(root);
+    const sounds = path.join(root, "sounds");
+    const db = path.join(root, "library.json");
+    const first = path.join(root, "first.wav");
+    const copy = path.join(root, "copy.wav");
+    await mkdir(sounds);
+    await writeFile(first, "same audio bytes");
+    await writeFile(copy, "same audio bytes");
+
+    const store = new LibraryStore();
+    await store.init(db, sounds);
+    expect((await store.importFiles([first])).added).toHaveLength(1);
+    expect((await store.importFiles([first, copy])).skipped).toEqual([
+      { filePath: first, reason: "duplicate" },
+      { filePath: copy, reason: "duplicate" },
+    ]);
+  });
+
   it("normalizes legacy clips and persists unrelated updates without losing hotkeys", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
     roots.push(root);
@@ -132,9 +152,9 @@ describe("LibraryStore", () => {
     await store.init(db, sounds);
     const [clip] = (await store.importFiles([source])).added;
 
-    expect(clip.hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(JSON.parse(await readFile(db, "utf8")).clips[0].hash).toBe(
-      clip.hash,
+    expect(clip.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.parse(await readFile(db, "utf8")).clips[0].contentHash).toBe(
+      clip.contentHash,
     );
   });
 

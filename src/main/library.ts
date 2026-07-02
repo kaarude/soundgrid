@@ -109,21 +109,21 @@ export class LibraryStore {
     const unknown = files.filter(
       (filePath) => !known.has(path.resolve(filePath)),
     );
-    const relocatable = missingClips.filter((clip) => clip.hash);
+    const relocatable = missingClips.filter((clip) => clip.contentHash);
     if (relocatable.length && unknown.length) {
       const byHash = new Map<string, string>();
       for (const filePath of unknown) {
-        const hash = await sha256(filePath);
+        const hash = await hashFile(filePath).catch(() => "");
         if (hash) byHash.set(hash, filePath);
       }
       for (const clip of relocatable) {
-        const relocated = byHash.get(clip.hash as string);
+        const relocated = byHash.get(clip.contentHash as string);
         if (!relocated) continue;
         clip.filePath = relocated;
         clip.missing = undefined;
         changed = true;
         known.add(path.resolve(relocated));
-        byHash.delete(clip.hash as string);
+        byHash.delete(clip.contentHash as string);
       }
     }
     for (const filePath of files) {
@@ -154,6 +154,13 @@ export class LibraryStore {
       this.clips.map((clip) => path.resolve(clip.filePath)),
     );
     const seenImports = new Set<string>();
+    const seenHashes = new Set<string>();
+    const knownHashes = new Set<string>();
+    for (const clip of this.clips) {
+      if (!existsSync(clip.filePath)) continue;
+      clip.contentHash ??= await hashFile(clip.filePath);
+      knownHashes.add(clip.contentHash);
+    }
     for (const file of filePaths) {
       if (!isSupported(file)) {
         skipped.push({ filePath: file, reason: "unsupported" });
@@ -168,7 +175,13 @@ export class LibraryStore {
         skipped.push({ filePath: file, reason: "duplicate" });
         continue;
       }
+      const contentHash = await hashFile(file);
+      if (knownHashes.has(contentHash) || seenHashes.has(contentHash)) {
+        skipped.push({ filePath: file, reason: "duplicate" });
+        continue;
+      }
       seenImports.add(resolved);
+      seenHashes.add(contentHash);
       const ext = path.extname(file);
       const id = randomUUID();
       const dest = path.join(this.soundsDir, `${id}${ext}`);
@@ -183,7 +196,7 @@ export class LibraryStore {
         volume: 1,
         loop: false,
         broadcast: true,
-        hash: await sha256(dest),
+        contentHash,
       };
       this.clips.push(clip);
       knownSources.add(path.resolve(dest));
@@ -320,12 +333,12 @@ function fileIsEmpty(filePath: string): boolean {
   }
 }
 
-async function sha256(filePath: string): Promise<string> {
-  return new Promise((resolve) => {
+async function hashFile(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
     const hash = createHash("sha256");
-    createReadStream(filePath)
-      .on("data", (chunk) => hash.update(chunk))
-      .on("end", () => resolve(hash.digest("hex")))
-      .on("error", () => resolve(""));
+    const stream = createReadStream(filePath);
+    stream.on("error", reject);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolve(hash.digest("hex")));
   });
 }
