@@ -1,6 +1,6 @@
 {
   "name": "soundgrid",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SoundGrid — an open-source, cross-platform soundboard that plays audio clips into your microphone stream (Windows-first).",
   "author": "SoundGrid Contributors",
   "license": "MIT",
@@ -10,7 +10,7 @@
     "dev:renderer": "vite",
     "dev:main": "wait-on tcp:5173 && npm run build:native && tsc -p tsconfig.electron.json && cross-env-shell electron .",
     "build:renderer": "vite build",
-    "build:main": "tsc -p tsconfig.electron.json",
+    "build:main": "tsc -p tsconfig.electron.json && node scripts/build-preload.mjs",
     "build:native": "cargo build --release --manifest-path native/audio-engine/Cargo.toml",
     "vendor:vb-cable": "node scripts/fetch-vb-cable.mjs",
     "build": "npm run build:renderer && npm run build:main",
@@ -23,6 +23,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html,md}\"",
     "check": "tsc -p tsconfig.electron.json --noEmit && tsc -p src/renderer/tsconfig.json --noEmit",
     "test": "vitest run --config vitest.config.ts",
+    "test:smoke": "node scripts/smoke-electron.mjs",
     "lint": "echo \"(lint) add eslint if desired\""
   },
   "devDependencies": {
@@ -31,6 +32,7 @@
     "cross-env": "^7.0.3",
     "electron": "^43.0.0",
     "electron-builder": "^26.15.3",
+    "esbuild": "^0.25.12",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",

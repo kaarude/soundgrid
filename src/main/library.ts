@@ -7,6 +7,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import {
   ImportSkippedFile,
   LibraryFile,
@@ -120,6 +122,13 @@ export class LibraryStore {
       this.clips.map((clip) => path.resolve(clip.filePath)),
     );
     const seenImports = new Set<string>();
+    const seenHashes = new Set<string>();
+    const knownHashes = new Set<string>();
+    for (const clip of this.clips) {
+      if (!existsSync(clip.filePath)) continue;
+      clip.contentHash ??= await hashFile(clip.filePath);
+      knownHashes.add(clip.contentHash);
+    }
     for (const file of filePaths) {
       if (!isSupported(file)) {
         skipped.push({ filePath: file, reason: "unsupported" });
@@ -134,7 +143,13 @@ export class LibraryStore {
         skipped.push({ filePath: file, reason: "duplicate" });
         continue;
       }
+      const contentHash = await hashFile(file);
+      if (knownHashes.has(contentHash) || seenHashes.has(contentHash)) {
+        skipped.push({ filePath: file, reason: "duplicate" });
+        continue;
+      }
       seenImports.add(resolved);
+      seenHashes.add(contentHash);
       const ext = path.extname(file);
       const id = randomUUID();
       const dest = path.join(this.soundsDir, `${id}${ext}`);
@@ -149,6 +164,7 @@ export class LibraryStore {
         volume: 1,
         loop: false,
         broadcast: true,
+        contentHash,
       };
       this.clips.push(clip);
       knownSources.add(path.resolve(dest));
@@ -263,4 +279,14 @@ function fileIsEmpty(filePath: string): boolean {
   } catch {
     return true;
   }
+}
+
+function hashFile(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(filePath);
+    stream.on("error", reject);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
 }

@@ -60,6 +60,27 @@ describe("selectableMonitorDevices", () => {
       selectableMonitorDevices(devices, settings({ headsetOnly: false })),
     ).toEqual(devices.monitors);
   });
+
+  it("recognizes localized headphones and falls back safely for unknown labels", () => {
+    const localized: AudioDevices = {
+      ...devices,
+      monitors: [
+        { id: "a50", label: "Kopfhörer (A50 X Game)", kind: "headphones" },
+        { id: "boxen", label: "Lautsprecher", kind: "speaker" },
+      ],
+    };
+    expect(
+      selectableMonitorDevices(localized, settings({ headsetOnly: true })),
+    ).toEqual([localized.monitors[0]]);
+
+    const unknown: AudioDevices = {
+      ...devices,
+      monitors: [{ id: "mystery", label: "Audioausgabe" }],
+    };
+    expect(
+      selectableMonitorDevices(unknown, settings({ headsetOnly: true })),
+    ).toEqual(unknown.monitors);
+  });
 });
 
 describe("reconcileAudioRouting", () => {

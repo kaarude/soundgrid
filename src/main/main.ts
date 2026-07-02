@@ -11,7 +11,11 @@ import {
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { IPC } from "../shared/ipc.js";
-import { AudioEngineEvent, HotkeyRegistrationResult } from "../shared/types.js";
+import {
+  AudioEngineEvent,
+  HotkeyRegistrationResult,
+  UpdateState,
+} from "../shared/types.js";
 import { LibraryStore } from "./library.js";
 import { SettingsStore } from "./settings.js";
 import { AudioEngine } from "./audio-engine.js";
@@ -47,6 +51,7 @@ class SoundGrid {
     monitorPlaying: null as string | null,
     micMuted: false,
   };
+  private updateState: UpdateState = { status: "idle" };
 
   async start() {
     await app.whenReady();
@@ -87,8 +92,8 @@ class SoundGrid {
     this.win = new BrowserWindow({
       width: 1100,
       height: 760,
-      minWidth: 820,
-      minHeight: 560,
+      minWidth: 640,
+      minHeight: 480,
       backgroundColor: "#0d1117",
       title: "SoundGrid",
       autoHideMenuBar: true,
@@ -130,13 +135,44 @@ class SoundGrid {
   private quitting = false;
 
   private configureUpdates(): void {
-    if (!app.isPackaged) return;
-    autoUpdater.autoDownload = true;
+    if (!app.isPackaged) {
+      const simulatedVersion = process.env.SOUNDGRID_TEST_UPDATE_VERSION;
+      this.setUpdateState(
+        simulatedVersion
+          ? { status: "available", version: simulatedVersion }
+          : { status: "unavailable" },
+      );
+      return;
+    }
+    autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.on("error", (error) =>
-      console.error("Automatic update failed:", error),
+    autoUpdater.on("checking-for-update", () =>
+      this.setUpdateState({ status: "checking" }),
     );
+    autoUpdater.on("update-available", (info) =>
+      this.setUpdateState({ status: "available", version: info.version }),
+    );
+    autoUpdater.on("update-not-available", () =>
+      this.setUpdateState({ status: "unavailable" }),
+    );
+    autoUpdater.on("download-progress", (progress) => {
+      const version =
+        "version" in this.updateState ? this.updateState.version : "";
+      this.setUpdateState({
+        status: "downloading",
+        version,
+        percent: Math.max(0, Math.min(100, progress.percent)),
+      });
+    });
+    autoUpdater.on("error", (error) => {
+      console.error("Automatic update failed:", error);
+      this.setUpdateState({
+        status: "error",
+        message: "Could not check for updates. Try again later.",
+      });
+    });
     autoUpdater.on("update-downloaded", async (info) => {
+      this.setUpdateState({ status: "downloaded", version: info.version });
       const result = await dialog.showMessageBox(this.win!, {
         type: "info",
         title: "SoundGrid update ready",
@@ -155,6 +191,11 @@ class SoundGrid {
     void autoUpdater
       .checkForUpdates()
       .catch((error) => console.error("Could not check for updates:", error));
+  }
+
+  private setUpdateState(state: UpdateState): void {
+    this.updateState = state;
+    this.win?.webContents.send(IPC.UPDATE_STATE, state);
   }
 
   private createTray() {
@@ -282,6 +323,20 @@ class SoundGrid {
     ipcMain.handle(IPC.CABLE_STATUS, () => this.driver.status());
     ipcMain.handle(IPC.CABLE_INSTALL, () => this.driver.install());
     ipcMain.handle(IPC.CABLE_DONATE, () => this.driver.openDonationPage());
+
+    // ---- Application updates ----
+    ipcMain.handle(IPC.UPDATE_GET_STATE, () => this.updateState);
+    ipcMain.handle(IPC.UPDATE_DOWNLOAD, async () => {
+      if (!app.isPackaged || this.updateState.status !== "available") return;
+      const version = this.updateState.version;
+      this.setUpdateState({ status: "downloading", version, percent: 0 });
+      await autoUpdater.downloadUpdate();
+    });
+    ipcMain.handle(IPC.UPDATE_INSTALL, () => {
+      if (!app.isPackaged || this.updateState.status !== "downloaded") return;
+      this.quitting = true;
+      autoUpdater.quitAndInstall();
+    });
 
     // ---- Mic transport ----
     ipcMain.handle(IPC.PLAY_BOTH, (_e, clipId: unknown) =>
