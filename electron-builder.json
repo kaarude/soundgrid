@@ -5,7 +5,7 @@
   "directories": {
     "output": "release"
   },
-  "files": ["dist/**/*", "package.json"],
+  "files": ["dist/**/*", "assets/logo.svg", "package.json"],
   "asar": true,
   "publish": {
     "provider": "github",

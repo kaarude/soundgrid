@@ -3,6 +3,7 @@ import { IPC } from "../shared/ipc.js";
 import {
   AudioDevices,
   AudioEngineEvent,
+  BulkClipPatch,
   CableStatus,
   HotkeyRegistrationResult,
   LibraryImportResult,
@@ -31,6 +32,8 @@ export interface SoundGridApi {
     id: string,
     patch: SoundClipPatch,
   ) => Promise<SoundClipUpdateResult>;
+  updateClips: (ids: string[], patch: BulkClipPatch) => Promise<SoundClip[]>;
+  rescanLibrary: () => Promise<SoundClip[]>;
   onLibraryChanged: (handler: (clips: SoundClip[]) => void) => () => void;
 
   // settings
@@ -86,6 +89,9 @@ contextBridge.exposeInMainWorld("soundgrid", {
   removeClip: (id: string) => ipcRenderer.invoke(IPC.LIBRARY_REMOVE, id),
   updateClip: (id: string, patch: SoundClipPatch) =>
     ipcRenderer.invoke(IPC.LIBRARY_UPDATE_CLIP, id, patch),
+  updateClips: (ids: string[], patch: BulkClipPatch) =>
+    ipcRenderer.invoke(IPC.LIBRARY_UPDATE_CLIPS, ids, patch),
+  rescanLibrary: () => ipcRenderer.invoke(IPC.LIBRARY_RESCAN),
   onLibraryChanged: (handler: (clips: SoundClip[]) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, clips: SoundClip[]) =>
       handler(clips);

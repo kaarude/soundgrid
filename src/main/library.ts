@@ -1,4 +1,5 @@
 import {
+  createReadStream,
   existsSync,
   promises as fs,
   statSync,
@@ -6,9 +7,7 @@ import {
   FSWatcher,
 } from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
-import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import {
   ImportSkippedFile,
   LibraryFile,
@@ -78,6 +77,13 @@ export class LibraryStore {
     this.watcher = undefined;
   }
 
+  // Force a folder reconciliation without waiting for a watch event. Useful
+  // when fs.watch misses a change (network drives, some Windows configurations).
+  async rescan(): Promise<SoundClip[]> {
+    await this.syncFolder();
+    return this.getClips();
+  }
+
   private async syncFolder(): Promise<boolean> {
     const entries = await fs.readdir(this.soundsDir, { withFileTypes: true });
     const files = entries
@@ -87,11 +93,37 @@ export class LibraryStore {
       this.clips.map((clip) => path.resolve(clip.filePath)),
     );
     let changed = false;
+    const missingClips = this.clips.filter(
+      (clip) => !existsSync(clip.filePath),
+    );
     for (const clip of this.clips) {
       const missing = !existsSync(clip.filePath);
       if (Boolean(clip.missing) !== missing) {
         clip.missing = missing || undefined;
         changed = true;
+      }
+    }
+    // Relink: when a clip's file vanished but a new file with the same content
+    // hash appeared in the sounds folder (the user renamed it in place), point
+    // the existing clip at the new path instead of orphaning its name/hotkey.
+    const unknown = files.filter(
+      (filePath) => !known.has(path.resolve(filePath)),
+    );
+    const relocatable = missingClips.filter((clip) => clip.contentHash);
+    if (relocatable.length && unknown.length) {
+      const byHash = new Map<string, string>();
+      for (const filePath of unknown) {
+        const hash = await hashFile(filePath).catch(() => "");
+        if (hash) byHash.set(hash, filePath);
+      }
+      for (const clip of relocatable) {
+        const relocated = byHash.get(clip.contentHash as string);
+        if (!relocated) continue;
+        clip.filePath = relocated;
+        clip.missing = undefined;
+        changed = true;
+        known.add(path.resolve(relocated));
+        byHash.delete(clip.contentHash as string);
       }
     }
     for (const filePath of files) {
@@ -197,6 +229,26 @@ export class LibraryStore {
     return { ...clip };
   }
 
+  // Apply one patch to many clips (bulk recategorize). Reuses the single-clip
+  // sanitizer so volume/name/hotkey rules stay consistent. Hotkey re-registration
+  // is the caller's responsibility (done once after the batch).
+  async updateClips(
+    ids: string[],
+    patch: SoundClipPatch,
+  ): Promise<SoundClip[]> {
+    const next = sanitizeClipPatch(patch);
+    const idSet = new Set(ids);
+    const updated: SoundClip[] = [];
+    for (const clip of this.clips) {
+      if (idSet.has(clip.id)) {
+        Object.assign(clip, next);
+        updated.push({ ...clip });
+      }
+    }
+    await this.persist();
+    return updated;
+  }
+
   private async persist() {
     const file: LibraryFile = { clips: this.clips };
     const temporary = `${this.dbPath}.tmp`;
@@ -281,7 +333,7 @@ function fileIsEmpty(filePath: string): boolean {
   }
 }
 
-function hashFile(filePath: string): Promise<string> {
+async function hashFile(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = createHash("sha256");
     const stream = createReadStream(filePath);

@@ -1,3 +1,4 @@
+import { BulkClipPatch } from "../../shared/types";
 import { icon } from "./icons";
 import { importAudioFiles } from "./library-actions";
 import { store } from "./store";
@@ -82,15 +83,50 @@ export function syncClipGrid(): void {
         selectedClipIds: allSelected ? [] : list.map((clip) => clip.id),
       }),
     );
+
+    const hasSelection = store.state.selectedClipIds.length > 0;
+    const selectedClips = store.state.clips.filter((clip) =>
+      store.state.selectedClipIds.includes(clip.id),
+    );
+    const allFavorited =
+      selectedClips.length > 0 && selectedClips.every((clip) => clip.favorite);
+    const favorite = bulkButton(
+      allFavorited ? "Unfavorite" : "Favorite",
+      allFavorited
+        ? "Remove selected from favorites"
+        : "Add selected to favorites",
+      () => void applyBulk({ favorite: !allFavorited }),
+      !hasSelection,
+    );
+    const broadcast = bulkButton(
+      "Mic + monitor",
+      "Route selected to mic and monitor",
+      () => void applyBulk({ broadcast: true }),
+      !hasSelection,
+    );
+    const monitorOnly = bulkButton(
+      "Monitor only",
+      "Route selected to monitor only",
+      () => void applyBulk({ broadcast: false }),
+      !hasSelection,
+    );
+
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "library-select library-select--danger";
     remove.textContent = `Remove (${store.state.selectedClipIds.length})`;
-    remove.disabled = store.state.selectedClipIds.length === 0;
+    remove.disabled = !hasSelection;
     remove.addEventListener("click", () => void removeSelected());
-    tools.append(all, remove);
+    tools.append(all, favorite, broadcast, monitorOnly, remove);
   }
-  tools.append(collapse);
+  const refresh = document.createElement("button");
+  refresh.type = "button";
+  refresh.className = "library-refresh";
+  refresh.title = "Re-scan the sounds folder";
+  refresh.setAttribute("aria-label", "Re-scan the sounds folder");
+  refresh.append(icon.refresh());
+  refresh.addEventListener("click", () => void rescanLibrary(refresh));
+  tools.append(refresh, collapse);
   header.append(tabs, tools);
   library.append(header);
 
@@ -131,6 +167,52 @@ async function removeSelected(): Promise<void> {
           ? error.message
           : "Could not remove the selected clips.",
     });
+  }
+}
+
+function bulkButton(
+  label: string,
+  title: string,
+  onClick: () => void,
+  disabled: boolean,
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "library-select";
+  button.textContent = label;
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.disabled = disabled;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+async function applyBulk(patch: BulkClipPatch): Promise<void> {
+  const ids = [...store.state.selectedClipIds];
+  if (!ids.length) return;
+  try {
+    const updated = await window.soundgrid.updateClips(ids, patch);
+    const byId = new Map(updated.map((clip) => [clip.id, clip]));
+    store.update({
+      clips: store.state.clips.map((clip) => byId.get(clip.id) ?? clip),
+    });
+  } catch (error) {
+    store.update({
+      audioError:
+        error instanceof Error ? error.message : "Could not update clips.",
+    });
+  }
+}
+
+async function rescanLibrary(button: HTMLButtonElement): Promise<void> {
+  button.disabled = true;
+  try {
+    const clips = await window.soundgrid.rescanLibrary();
+    store.update({ clips });
+  } catch {
+    /* keep the current list on failure */
+  } finally {
+    button.disabled = false;
   }
 }
 

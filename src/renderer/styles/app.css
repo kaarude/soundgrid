@@ -721,11 +721,13 @@ body {
 }
 .library-tab:focus-visible,
 .library-collapse:focus-visible,
+.library-refresh:focus-visible,
 .card-favorite:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.library-collapse {
+.library-collapse,
+.library-refresh {
   appearance: none;
   display: inline-flex;
   align-items: center;
@@ -742,9 +744,15 @@ body {
     color var(--dur-fast) var(--ease-out-quint),
     background var(--dur-fast) var(--ease-out-quint);
 }
-.library-collapse:hover {
+.library-collapse:hover,
+.library-refresh:hover {
   color: var(--text);
   background: var(--bg-card);
+}
+.library-collapse:disabled,
+.library-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .library-collapse svg {
   transform: rotate(-90deg);

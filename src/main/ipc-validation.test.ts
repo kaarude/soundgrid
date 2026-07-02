@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   requireFiniteNumber,
   requireStringArray,
+  validateBulkClipPatch,
   validateHotkeyBindings,
   validateSettingsPatch,
   validateSoundClipPatch,
@@ -48,5 +49,21 @@ describe("IPC validation", () => {
       { id: "clip", keys: "Alt+A" },
     ]);
     expect(() => validateHotkeyBindings([{ id: "clip" }])).toThrow("keys");
+  });
+
+  it("validates bulk clip patches and rejects unique-per-clip fields", () => {
+    expect(
+      validateBulkClipPatch({ favorite: true, broadcast: false, volume: 0.5 }),
+    ).toEqual({ favorite: true, broadcast: false, volume: 0.5 });
+    // name and hotkey are unique per clip, so they are blocked from bulk edits.
+    expect(() => validateBulkClipPatch({ name: "All the same" })).toThrow(
+      "Unsupported bulk clip field",
+    );
+    expect(() => validateBulkClipPatch({ hotkey: "Control+H" })).toThrow(
+      "Unsupported bulk clip field",
+    );
+    expect(() => validateBulkClipPatch({ filePath: "/tmp/evil.wav" })).toThrow(
+      "Unsupported bulk clip field",
+    );
   });
 });
