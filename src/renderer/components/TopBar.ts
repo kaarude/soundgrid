@@ -39,6 +39,21 @@ export function TopBar(): HTMLElement {
   const right = document.createElement("div");
   right.className = "topbar-right";
 
+  const update = document.createElement("button");
+  update.type = "button";
+  update.className = "topbar-update";
+  update.hidden = true;
+  update.setAttribute("aria-live", "polite");
+  update.append(icon.bolt());
+  const updateLabel = document.createElement("span");
+  update.append(updateLabel);
+  update.addEventListener("click", async () => {
+    const state = store.state.updateState;
+    if (state.status === "available") await window.soundgrid.downloadUpdate();
+    else if (state.status === "downloaded")
+      await window.soundgrid.installUpdate();
+  });
+
   const stopAll = document.createElement("button");
   stopAll.type = "button";
   stopAll.className = "stop-all topbar-stop";
@@ -61,7 +76,7 @@ export function TopBar(): HTMLElement {
   gear.append(icon.gear());
   gear.addEventListener("click", () => store.update({ settingsOpen: true }));
 
-  right.append(stopAll, gear);
+  right.append(update, stopAll, gear);
   el.append(brand, buses, right);
   return el;
 }
@@ -75,4 +90,22 @@ export function syncTopBar(): void {
       "has-muted-bus",
       store.state.micMuted || store.state.monitorMuted,
     );
+  const update = document.querySelector<HTMLButtonElement>(".topbar-update");
+  const label = update?.querySelector("span");
+  if (!update || !label) return;
+  const state = store.state.updateState;
+  update.hidden = !["available", "downloading", "downloaded"].includes(
+    state.status,
+  );
+  update.disabled = state.status === "downloading";
+  if (state.status === "available") {
+    label.textContent = `Update ${state.version}`;
+    update.title = `Download SoundGrid ${state.version}`;
+  } else if (state.status === "downloading") {
+    label.textContent = `Downloading ${Math.round(state.percent)}%`;
+    update.title = `Downloading SoundGrid ${state.version}`;
+  } else if (state.status === "downloaded") {
+    label.textContent = "Restart to update";
+    update.title = `Install SoundGrid ${state.version}`;
+  }
 }

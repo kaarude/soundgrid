@@ -90,6 +90,12 @@ export function App(): HTMLElement {
     }
   });
   window.soundgrid.onLibraryChanged((clips) => store.update({ clips }));
+  window.soundgrid.onUpdateState((updateState) =>
+    store.update({ updateState }),
+  );
+  void window.soundgrid
+    .getUpdateState()
+    .then((updateState) => store.update({ updateState }));
   void boot();
   return el;
 }

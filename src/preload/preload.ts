@@ -11,6 +11,7 @@ import {
   SoundClip,
   SoundClipPatch,
   SoundClipUpdateResult,
+  UpdateState,
 } from "../shared/types.js";
 
 // ---------------------------------------------------------------------------
@@ -42,6 +43,12 @@ export interface SoundGridApi {
   getCableStatus: () => Promise<CableStatus>;
   installCable: () => Promise<CableStatus>;
   openCableDonation: () => Promise<void>;
+
+  // application updates
+  getUpdateState: () => Promise<UpdateState>;
+  downloadUpdate: () => Promise<void>;
+  installUpdate: () => Promise<void>;
+  onUpdateState: (handler: (state: UpdateState) => void) => () => void;
 
   // mic transport
   playBoth: (clipId: string) => Promise<void>;
@@ -102,6 +109,16 @@ contextBridge.exposeInMainWorld("soundgrid", {
   getCableStatus: () => ipcRenderer.invoke(IPC.CABLE_STATUS),
   installCable: () => ipcRenderer.invoke(IPC.CABLE_INSTALL),
   openCableDonation: () => ipcRenderer.invoke(IPC.CABLE_DONATE),
+
+  getUpdateState: () => ipcRenderer.invoke(IPC.UPDATE_GET_STATE),
+  downloadUpdate: () => ipcRenderer.invoke(IPC.UPDATE_DOWNLOAD),
+  installUpdate: () => ipcRenderer.invoke(IPC.UPDATE_INSTALL),
+  onUpdateState: (handler: (state: UpdateState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: UpdateState) =>
+      handler(state);
+    ipcRenderer.on(IPC.UPDATE_STATE, listener);
+    return () => ipcRenderer.removeListener(IPC.UPDATE_STATE, listener);
+  },
 
   playBoth: (clipId: string) => ipcRenderer.invoke(IPC.PLAY_BOTH, clipId),
   micPlay: (clipId: string) => ipcRenderer.invoke(IPC.MIC_PLAY, clipId),

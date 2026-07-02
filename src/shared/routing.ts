@@ -10,16 +10,22 @@ export function clipBuses(clip: SoundClip, micOnly: boolean): ClipBus[] {
 }
 
 export function isHeadphoneDevice(device: AudioDevice): boolean {
-  return /head(phone|set)|earbud|airpod/i.test(device.label);
+  if (device.kind === "headphones" || device.kind === "headset") return true;
+  if (device.kind === "speaker" || device.kind === "virtual") return false;
+  return /head(phone|set)|earbud|airpod|kopfhörer|casque|auricular|cuffie|fone de ouvido/i.test(
+    device.label,
+  );
 }
 
 export function selectableMonitorDevices(
   devices: AudioDevices,
   settings: Pick<Settings, "headsetOnly">,
 ): AudioDevice[] {
-  return settings.headsetOnly
-    ? devices.monitors.filter(isHeadphoneDevice)
-    : devices.monitors;
+  if (!settings.headsetOnly) return devices.monitors;
+  const headphones = devices.monitors.filter(isHeadphoneDevice);
+  // Device metadata is not complete on every backend. Do not make routing
+  // impossible merely because a localized device name could not be classified.
+  return headphones.length ? headphones : devices.monitors;
 }
 
 export function reconcileAudioRouting(
