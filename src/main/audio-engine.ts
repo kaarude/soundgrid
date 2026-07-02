@@ -25,6 +25,15 @@ type NativeEvent =
   | { type: "clipEnded"; bus: Bus; clipId: string }
   | { type: "error"; message: string };
 
+export interface AudioEngineOptions {
+  // Override native executable resolution. Test seam; production resolves via
+  // findNativeExecutable() (SOUNDGRID_AUDIO_ENGINE env, packaged resources, or
+  // the cargo target directory).
+  executableCommand?: { command: string; args: string[] };
+  startupTimeout?: number;
+  deviceTimeout?: number;
+}
+
 export class AudioEngine {
   private process?: ChildProcessWithoutNullStreams;
   private ready = false;
@@ -33,11 +42,20 @@ export class AudioEngine {
   private eventHandler?: (event: AudioEngineEvent) => void;
   private micMuted = false;
   private monitorMuted = false;
+  private readonly executableCommand?: { command: string; args: string[] };
+  private readonly startupTimeout: number;
+  private readonly deviceTimeout: number;
+
+  constructor(options?: AudioEngineOptions) {
+    this.executableCommand = options?.executableCommand;
+    this.startupTimeout = options?.startupTimeout ?? 5_000;
+    this.deviceTimeout = options?.deviceTimeout ?? 2_000;
+  }
 
   async start(settings: Settings): Promise<void> {
     this.currentSettings = settings;
-    const executable = findNativeExecutable();
-    if (!executable) {
+    const target = this.executableCommand ?? resolveNativeExecutable();
+    if (!target) {
       this.emit({
         type: "error",
         message:
@@ -47,7 +65,7 @@ export class AudioEngine {
     }
 
     await new Promise<void>((resolve) => {
-      const child = spawn(executable, [], {
+      const child = spawn(target.command, target.args, {
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
       });
@@ -58,7 +76,7 @@ export class AudioEngine {
           message: "Native audio engine startup timed out.",
         });
         resolve();
-      }, 5_000);
+      }, this.startupTimeout);
 
       readline.createInterface({ input: child.stdout }).on("line", (line) => {
         let event: NativeEvent;
@@ -118,7 +136,7 @@ export class AudioEngine {
         const index = this.deviceWaiters.indexOf(waiter);
         if (index >= 0) this.deviceWaiters.splice(index, 1);
         resolve(emptyDevices());
-      }, 2_000);
+      }, this.deviceTimeout);
       this.deviceWaiters.push(waiter);
       this.send({ type: "listDevices" });
     });
@@ -274,6 +292,12 @@ export class AudioEngine {
   private emit(event: AudioEngineEvent): void {
     this.eventHandler?.(event);
   }
+}
+
+function resolveNativeExecutable():
+  { command: string; args: string[] } | undefined {
+  const executable = findNativeExecutable();
+  return executable ? { command: executable, args: [] } : undefined;
 }
 
 function findNativeExecutable(): string | undefined {

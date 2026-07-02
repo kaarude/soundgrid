@@ -24,6 +24,7 @@ import {
   requireFiniteNumber,
   requireString,
   requireStringArray,
+  validateBulkClipPatch,
   validateHotkeyBindings,
   validateSettingsPatch,
   validateSoundClipPatch,
@@ -214,6 +215,7 @@ class SoundGrid {
   private registerIpc() {
     // ---- Library ----
     ipcMain.handle(IPC.LIBRARY_GET, () => this.library.getClips());
+    ipcMain.handle(IPC.LIBRARY_RESCAN, () => this.library.rescan());
     ipcMain.handle(IPC.LIBRARY_IMPORT, async (_e, filePaths: unknown) => {
       const added = await this.library.importFiles(
         requireStringArray(filePaths, "filePaths"),
@@ -225,6 +227,16 @@ class SoundGrid {
       await this.library.removeClip(clipId);
       this.registerPersistedHotkeys();
     });
+    ipcMain.handle(
+      IPC.LIBRARY_UPDATE_CLIPS,
+      async (_e, rawIds: unknown, rawPatch: unknown) => {
+        const ids = requireStringArray(rawIds, "clipIds");
+        const patch = validateBulkClipPatch(rawPatch);
+        const updated = await this.library.updateClips(ids, patch);
+        this.registerPersistedHotkeys();
+        return updated;
+      },
+    );
     ipcMain.handle(
       IPC.LIBRARY_UPDATE_CLIP,
       async (_e, id: unknown, rawPatch: unknown) => {

@@ -7,6 +7,8 @@ export const IPC = {
   LIBRARY_IMPORT: "library:import",
   LIBRARY_REMOVE: "library:remove",
   LIBRARY_UPDATE_CLIP: "library:updateClip",
+  LIBRARY_UPDATE_CLIPS: "library:updateClips",
+  LIBRARY_RESCAN: "library:rescan",
   LIBRARY_CHANGED: "library:changed",
 
   // Settings

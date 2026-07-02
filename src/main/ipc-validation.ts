@@ -1,4 +1,4 @@
-import { Settings, SoundClipPatch } from "../shared/types.js";
+import { BulkClipPatch, Settings, SoundClipPatch } from "../shared/types.js";
 
 const MAX_STRING_LENGTH = 4_096;
 const MAX_IMPORT_FILES = 256;
@@ -102,6 +102,30 @@ export function validateSoundClipPatch(value: unknown): SoundClipPatch {
         break;
       default:
         throw new TypeError(`Unsupported clip field: ${key}`);
+    }
+  }
+
+  return patch;
+}
+
+// Bulk patches may only touch the recategorize fields — name and hotkey are
+// unique per clip, so they are rejected to prevent clobbering.
+export function validateBulkClipPatch(value: unknown): BulkClipPatch {
+  const input = requireRecord(value, "bulk clip patch");
+  const patch: BulkClipPatch = {};
+
+  for (const [key, raw] of Object.entries(input)) {
+    switch (key) {
+      case "favorite":
+      case "broadcast":
+      case "loop":
+        patch[key] = requireBoolean(raw, key);
+        break;
+      case "volume":
+        patch.volume = requireFiniteNumber(raw, key);
+        break;
+      default:
+        throw new TypeError(`Unsupported bulk clip field: ${key}`);
     }
   }
 

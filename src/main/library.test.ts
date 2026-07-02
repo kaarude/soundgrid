@@ -1,4 +1,11 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -110,5 +117,122 @@ describe("LibraryStore", () => {
     expect(JSON.parse(await readFile(db, "utf8")).clips[0].hotkey).toBe(
       "Control+L",
     );
+  });
+
+  it("stores a content hash on import", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
+    roots.push(root);
+    const sounds = path.join(root, "sounds");
+    const db = path.join(root, "library.json");
+    const source = path.join(root, "clip.wav");
+    await mkdir(sounds);
+    await writeFile(source, "audio fixture");
+
+    const store = new LibraryStore();
+    await store.init(db, sounds);
+    const [clip] = (await store.importFiles([source])).added;
+
+    expect(clip.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.parse(await readFile(db, "utf8")).clips[0].hash).toBe(
+      clip.hash,
+    );
+  });
+
+  it("rescan picks up files added to the sounds folder and marks missing ones", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
+    roots.push(root);
+    const sounds = path.join(root, "sounds");
+    const db = path.join(root, "library.json");
+    const source = path.join(root, "clip.wav");
+    await mkdir(sounds);
+    await writeFile(source, "audio fixture");
+
+    const store = new LibraryStore();
+    await store.init(db, sounds);
+    const [clip] = (await store.importFiles([source])).added;
+
+    await writeFile(path.join(sounds, "external.wav"), "external audio");
+    await rm(clip.filePath);
+
+    const clips = await store.rescan();
+    expect(clips).toHaveLength(2);
+    expect(clips.find((c) => c.id === clip.id)?.missing).toBe(true);
+    expect(clips.find((c) => c.name === "external.wav")).toBeTruthy();
+  });
+
+  it("relinks a clip to a renamed file instead of orphaning it", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
+    roots.push(root);
+    const sounds = path.join(root, "sounds");
+    const db = path.join(root, "library.json");
+    const source = path.join(root, "clip.wav");
+    await mkdir(sounds);
+    await writeFile(source, "audio fixture content");
+
+    const store = new LibraryStore();
+    await store.init(db, sounds);
+    const [clip] = (await store.importFiles([source])).added;
+    await store.updateClip(clip.id, { favorite: true, hotkey: "Control+H" });
+
+    // Simulate the user renaming the managed copy inside the sounds folder.
+    const renamed = path.join(sounds, "moved.wav");
+    await rename(clip.filePath, renamed);
+
+    await store.rescan();
+    const after = store.byId(clip.id);
+    expect(after).toMatchObject({
+      name: "clip.wav",
+      favorite: true,
+      hotkey: "Control+H",
+      missing: undefined,
+    });
+    expect(after?.filePath).toBe(renamed);
+    // No fresh duplicate clip was created for the renamed file.
+    expect(store.getClips()).toHaveLength(1);
+  });
+
+  it("updateClips applies a patch to many clips and ignores unknown ids", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
+    roots.push(root);
+    const sounds = path.join(root, "sounds");
+    const db = path.join(root, "library.json");
+    await mkdir(sounds);
+    await writeFile(path.join(root, "a.wav"), "a");
+    await writeFile(path.join(root, "b.wav"), "b");
+
+    const store = new LibraryStore();
+    await store.init(db, sounds);
+    const added = (
+      await store.importFiles([
+        path.join(root, "a.wav"),
+        path.join(root, "b.wav"),
+      ])
+    ).added;
+    const ids = added.map((c) => c.id);
+
+    const updated = await store.updateClips(ids, {
+      broadcast: false,
+      favorite: true,
+    });
+    expect(updated).toHaveLength(2);
+    expect(
+      updated.every((c) => c.broadcast === false && c.favorite === true),
+    ).toBe(true);
+
+    const mixed = await store.updateClips([ids[0], "does-not-exist"], {
+      loop: true,
+    });
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0].loop).toBe(true);
+    expect(mixed[0].broadcast).toBe(false);
+
+    const persisted = JSON.parse(await readFile(db, "utf8")).clips;
+    expect(
+      persisted.find((c: { id: string }) => c.id === ids[0]),
+    ).toMatchObject({
+      loop: true,
+      broadcast: false,
+      favorite: true,
+    });
   });
 });

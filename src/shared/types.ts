@@ -12,6 +12,7 @@ export interface SoundClip {
   loop: boolean;
   broadcast: boolean; // sent to mic output when true; monitor-only when false
   missing?: boolean; // source copy disappeared from the managed library
+  hash?: string; // content hash used to relink a renamed file in place
 }
 
 export type SoundClipPatch = Partial<
@@ -20,6 +21,12 @@ export type SoundClipPatch = Partial<
   // null explicitly clears a binding; an omitted field leaves it unchanged.
   hotkey?: string | null;
 };
+
+// A subset of SoundClipPatch for bulk edits — no name or hotkey, since those
+// are unique per clip. Used by the bulk recategorize toolbar.
+export type BulkClipPatch = Partial<
+  Pick<SoundClip, "favorite" | "broadcast" | "loop" | "volume">
+>;
 
 export interface HotkeyRegistrationFailure {
   id: string;
