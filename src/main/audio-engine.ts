@@ -175,7 +175,9 @@ export class AudioEngine {
   }
 
   async playToMonitor(clip: SoundClip | undefined): Promise<void> {
-    if (!clip) return;
+    // Mic-only is an output-routing guarantee, not merely a shortcut default:
+    // direct Preview actions and IPC calls must not revive local playback.
+    if (!clip || this.currentSettings?.micOnly) return;
     this.play("monitor", clip);
     this.emit({
       type: "transport",
@@ -263,6 +265,7 @@ export class AudioEngine {
       passthrough: settings.passthrough,
       micVolume: clamp01(settings.masterMicVolume),
       monitorVolume: clamp01(settings.monitorVolume),
+      monitorEnabled: !settings.micOnly,
       overlap: settings.overlap,
     });
   }
@@ -334,6 +337,7 @@ function routingChanged(a: Settings, b: Settings): boolean {
     a.monitorDeviceId !== b.monitorDeviceId ||
     a.realMicDeviceId !== b.realMicDeviceId ||
     a.passthrough !== b.passthrough ||
+    a.micOnly !== b.micOnly ||
     a.overlap !== b.overlap
   );
 }

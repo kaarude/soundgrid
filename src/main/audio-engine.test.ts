@@ -200,6 +200,7 @@ describe("AudioEngine bridge", () => {
       passthrough: false,
       micVolume: 0.9,
       monitorVolume: 0.8,
+      monitorEnabled: true,
       overlap: "stop",
     });
   });
@@ -267,6 +268,26 @@ describe("AudioEngine bridge", () => {
         volume: 0.4,
         looped: false,
       },
+    ]);
+  });
+
+  it("fully disables native monitor routing in mic-only mode", async () => {
+    const { engine, transcript } = makeEngine();
+    await engine.start({ ...baseSettings, micOnly: true });
+
+    await engine.playBoth(clip({ id: "mic-only" }));
+    await engine.playToMonitor(clip({ id: "preview" }));
+
+    const commands = (await waitForCommands(transcript, 2)) as Record<
+      string,
+      unknown
+    >[];
+    expect(commands[0]).toMatchObject({
+      type: "configure",
+      monitorEnabled: false,
+    });
+    expect(commands.filter((command) => command.type === "play")).toEqual([
+      expect.objectContaining({ bus: "mic", clipId: "mic-only" }),
     ]);
   });
 
@@ -366,6 +387,7 @@ describe("AudioEngine bridge", () => {
       passthrough: false,
       micVolume: 0.9,
       monitorVolume: 0.8,
+      monitorEnabled: true,
       overlap: "stop",
     });
   });
