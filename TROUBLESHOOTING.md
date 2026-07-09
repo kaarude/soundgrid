@@ -1,5 +1,8 @@
 # Troubleshooting
 
+> [!IMPORTANT]
+> **The macOS version is not working yet.** Its microphone permission prompt can repeat forever after either response, and the interface can be clipped instead of resizing with the window. There is currently no supported workaround; the preview must not be treated as a functional macOS release.
+
 ## Other applications cannot hear clips
 
 1. Open Settings and confirm **Mic output device** is `CABLE Input` on Windows or `BlackHole 2ch` on macOS.
@@ -33,9 +36,9 @@ which SoundGrid does not currently expose.
 
 ## Microphone passthrough is unavailable on macOS
 
-Open **System Settings → Privacy & Security → Microphone**, allow SoundGrid,
-and restart the app. SoundGrid requests this permission only when physical-mic
-passthrough is enabled; playing clips does not capture the microphone.
+This is a confirmed blocker in `v0.2.0-beta.3`: the permission request may
+repeat after either **Allow** or **Don't Allow** is selected. Changing the
+system permission does not currently make the preview supported or reliable.
 
 ## Settings or the library were corrupted
 

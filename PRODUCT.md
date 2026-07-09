@@ -1,5 +1,8 @@
 # Product
 
+> [!IMPORTANT]
+> **The macOS version is not working yet.** The current preview loops its microphone permission request after either response and clips the interface instead of resizing it with the window. macOS is an experimental target, not a supported product, until both blockers are fixed and validated on real hardware.
+
 ## Register
 
 product
@@ -16,7 +19,7 @@ The shared job: **fire a sound clip into the microphone stream so other people h
 
 ## Product Purpose
 
-SoundGrid is an open-source Windows and macOS soundboard that plays audio clips directly into the active microphone stream via a virtual audio device, so games, Discord, OBS, and any voice app receive the clips as mic input. No extra hardware. Distributed as a Windows installer or a universal macOS `.dmg`.
+SoundGrid is an open-source Windows soundboard that plays audio clips directly into the active microphone stream via a virtual audio device, so games, Discord, OBS, and any voice app receive the clips as mic input. No extra hardware. An experimental, currently non-working universal macOS `.dmg` is available only for development testing.
 
 It exists because the only polished tools that do this are commercial; an open-source alternative should be free, auditable, and not dependent on a paid driver. The product's defining technical commitment is the **two-bus audio model**: a _mic bus_ (sent to a virtual cable, heard by others) and a _monitor bus_ (sent to headphones, heard only by you), each with independent play/pause/stop/mute/volume. That distinction _is_ the product — it must be impossible to confuse which bus a clip is going to.
 
