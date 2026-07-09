@@ -23,7 +23,7 @@ import { AudioEngine } from "./audio-engine.js";
 export class DeviceManager {
   constructor(private readonly audio: AudioEngine) {}
 
-  list(): Promise<AudioDevices> {
-    return this.audio.listDevices();
+  list(includeInputs = true): Promise<AudioDevices> {
+    return this.audio.listDevices(includeInputs);
   }
 }

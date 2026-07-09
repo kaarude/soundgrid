@@ -369,8 +369,15 @@ class SoundGrid {
     });
 
     // ---- Devices ----
-    ipcMain.handle(IPC.DEVICES_LIST, () => this.devices.list());
-    ipcMain.handle(IPC.DEVICES_REFRESH, () => this.devices.list());
+    ipcMain.handle(IPC.DEVICES_LIST, () =>
+      this.devices.list(canEnumerateMicrophones()),
+    );
+    ipcMain.handle(IPC.DEVICES_REFRESH, async () => {
+      const includeInputs =
+        process.platform !== "darwin" ||
+        (await ensureMacMicrophoneAccess(systemPreferences, { prompt: true }));
+      return this.devices.list(includeInputs);
+    });
     ipcMain.handle(IPC.CABLE_STATUS, () => this.driver.status());
     ipcMain.handle(IPC.CABLE_INSTALL, () => this.driver.install());
     ipcMain.handle(IPC.CABLE_DONATE, () => this.driver.openDonationPage());
@@ -547,5 +554,12 @@ function denyRendererPermissions(): void {
   session.defaultSession.setPermissionCheckHandler(() => false);
   session.defaultSession.setPermissionRequestHandler(
     (_webContents, _permission, callback) => callback(false),
+  );
+}
+
+function canEnumerateMicrophones(): boolean {
+  return (
+    process.platform !== "darwin" ||
+    systemPreferences.getMediaAccessStatus("microphone") === "granted"
   );
 }

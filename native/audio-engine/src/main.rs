@@ -152,21 +152,24 @@ impl Engine {
         }
     }
 
-    fn devices(&self) -> Result<(Vec<DeviceInfo>, Vec<DeviceInfo>)> {
-        Ok((
-            enumerate(
-                self.host
-                    .output_devices()
-                    .context("cannot enumerate output devices")?,
-                DeviceDirection::Output,
-            )?,
+    fn devices(&self, include_inputs: bool) -> Result<(Vec<DeviceInfo>, Vec<DeviceInfo>)> {
+        let outputs = enumerate(
+            self.host
+                .output_devices()
+                .context("cannot enumerate output devices")?,
+            DeviceDirection::Output,
+        )?;
+        let inputs = if include_inputs {
             enumerate(
                 self.host
                     .input_devices()
                     .context("cannot enumerate input devices")?,
                 DeviceDirection::Input,
-            )?,
-        ))
+            )?
+        } else {
+            Vec::new()
+        };
+        Ok((outputs, inputs))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -356,8 +359,8 @@ fn main() -> Result<()> {
 
 fn handle(engine: &mut Engine, command: Command) -> Result<bool> {
     match command {
-        Command::ListDevices => {
-            let (outputs, inputs) = engine.devices()?;
+        Command::ListDevices { include_inputs } => {
+            let (outputs, inputs) = engine.devices(include_inputs)?;
             emit(&Event::Devices { outputs, inputs });
         }
         Command::Configure {

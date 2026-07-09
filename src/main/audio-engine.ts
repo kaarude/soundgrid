@@ -127,7 +127,7 @@ export class AudioEngine {
     this.eventHandler = handler;
   }
 
-  async listDevices(): Promise<AudioDevices> {
+  async listDevices(includeInputs = true): Promise<AudioDevices> {
     if (!this.ready) return emptyDevices();
     return new Promise<AudioDevices>((resolve) => {
       const waiter = (devices: AudioDevices) => {
@@ -140,7 +140,7 @@ export class AudioEngine {
         resolve(emptyDevices());
       }, this.deviceTimeout);
       this.deviceWaiters.push(waiter);
-      this.send({ type: "listDevices" });
+      this.send({ type: "listDevices", includeInputs });
     });
   }
 
@@ -249,7 +249,7 @@ export class AudioEngine {
       const fallback = setTimeout(() => {
         if (child.exitCode === null && child.signalCode === null) child.kill();
       }, 250);
-      fallback.unref();
+      child.once("exit", () => clearTimeout(fallback));
     }
   }
 

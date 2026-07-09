@@ -322,7 +322,7 @@ async function refreshAudioDevices(button: HTMLButtonElement): Promise<void> {
   button.disabled = true;
   button.textContent = "Refreshing…";
   try {
-    const devices = await window.soundgrid.listDevices();
+    const devices = await window.soundgrid.refreshDevices();
     const cableStatus = await window.soundgrid.getCableStatus();
     store.update({ devices, devicesStatus: "ready", cableStatus });
     const patch = reconcileAudioRouting(store.state.settings, devices);
