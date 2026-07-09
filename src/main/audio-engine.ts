@@ -242,9 +242,15 @@ export class AudioEngine {
 
   shutdown(): void {
     this.send({ type: "shutdown" });
-    this.process?.kill();
+    const child = this.process;
     this.process = undefined;
     this.ready = false;
+    if (child) {
+      const fallback = setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) child.kill();
+      }, 250);
+      fallback.unref();
+    }
   }
 
   private play(bus: Bus, clip: SoundClip): void {
