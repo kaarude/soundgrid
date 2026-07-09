@@ -110,7 +110,7 @@ Take a working app to a defensible, studio-grade product.
 - **Description:** Designed states for: device disconnect mid-playback, mic permission denied, corrupt library file, missing source files, unsupported/empty audio file, and audio engine init failure. Each with a clear message and a recovery path.
 - **Goal:** Failures are legible and recoverable, never silent or crashing.
 
-### 2.5 Audio quality niceties
+### 2.5 Audio quality niceties ✅
 
 - **Description:** Loudness normalization on import (target peak so clips don't clip the mic bus), optional fade-in/fade-out to avoid clicks, per-clip trim, and a master limiter on the mic bus to prevent clipping when overlapping.
 - **Goal:** Clips play at consistent, safe levels with no abrupt digital clicks.

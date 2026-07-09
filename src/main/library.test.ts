@@ -30,10 +30,19 @@ describe("sanitizeClipPatch", () => {
     expect(sanitizeClipPatch({ hotkey: null })).toEqual({ hotkey: undefined });
   });
 
-  it("trims names, clamps volume, and rejects blank names", () => {
-    expect(sanitizeClipPatch({ name: "  Air horn  ", volume: 4 })).toEqual({
+  it("trims names, clamps volume/trim, and rejects blank names", () => {
+    expect(
+      sanitizeClipPatch({
+        name: "  Air horn  ",
+        volume: 4,
+        trimStart: -2,
+        trimEnd: 900,
+      }),
+    ).toEqual({
       name: "Air horn",
       volume: 1,
+      trimStart: 0,
+      trimEnd: 600,
     });
     expect(() => sanitizeClipPatch({ name: "   " })).toThrow("cannot be empty");
   });
@@ -132,6 +141,8 @@ describe("LibraryStore", () => {
       hotkey: "Control+L",
       favorite: true,
       volume: 1,
+      trimStart: 0,
+      trimEnd: 0,
       loop: false,
       broadcast: true,
     });

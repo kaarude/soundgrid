@@ -42,6 +42,7 @@ Sound clip
 - **Tray and per-clip controls** — the window functions as a control panel rather than a primary view, designed for peripheral vision and muscle memory.
 - **Mute / monitor-only / mic-only routing states** — distinguishable at a glance by shape and position, not color alone.
 - **Local library** — import custom clips; SoundGrid stores them in the application data directory.
+- **Audio-safe playback** — peak-normalized clips, click-safe fades, per-clip start/end trim, and soft limiting when cues overlap.
 - **Single executable** — NSIS installer and portable build via `electron-builder`.
 
 ### Supported audio formats

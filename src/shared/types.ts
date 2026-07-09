@@ -9,6 +9,8 @@ export interface SoundClip {
   favorite: boolean;
   hotkey?: string;
   volume: number; // 0..1 per-clip gain
+  trimStart: number; // seconds removed from the beginning
+  trimEnd: number; // seconds removed from the end
   loop: boolean;
   broadcast: boolean; // sent to mic output when true; monitor-only when false
   missing?: boolean; // source copy disappeared from the managed library
@@ -16,7 +18,16 @@ export interface SoundClip {
 }
 
 export type SoundClipPatch = Partial<
-  Pick<SoundClip, "name" | "favorite" | "volume" | "loop" | "broadcast">
+  Pick<
+    SoundClip,
+    | "name"
+    | "favorite"
+    | "volume"
+    | "trimStart"
+    | "trimEnd"
+    | "loop"
+    | "broadcast"
+  >
 > & {
   // null explicitly clears a binding; an omitted field leaves it unchanged.
   hotkey?: string | null;

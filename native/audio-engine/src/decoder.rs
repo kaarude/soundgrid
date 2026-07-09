@@ -110,13 +110,15 @@ pub fn decode(path: &str) -> Result<DecodedAudio> {
 }
 
 fn normalize_peak(samples: &mut [f32]) {
+    const TARGET_PEAK: f32 = 0.9;
+    const MIN_NORMALIZABLE_PEAK: f32 = 0.01;
     let peak = samples
         .iter()
         .fold(0.0_f32, |current, sample| current.max(sample.abs()));
-    // Avoid aggressively amplifying near-silent files and leave already-safe
-    // clips unchanged. Louder files are reduced to consistent headroom.
-    if peak > 0.95 {
-        let gain = 0.95 / peak;
+    // Normalize audible clips in both directions so cues land at a consistent
+    // level. Near-silence is left alone to avoid amplifying a noise floor.
+    if peak >= MIN_NORMALIZABLE_PEAK && (peak - TARGET_PEAK).abs() > f32::EPSILON {
+        let gain = TARGET_PEAK / peak;
         for sample in samples {
             *sample *= gain;
         }
@@ -164,7 +166,7 @@ fn append_interleaved(
 
 #[cfg(test)]
 mod tests {
-    use super::{decode, MAX_AUDIO_FILE_BYTES};
+    use super::{decode, normalize_peak, MAX_AUDIO_FILE_BYTES};
     use std::{fs, time::SystemTime};
 
     #[test]
@@ -201,9 +203,9 @@ mod tests {
         assert_eq!(decoded.channels, 1);
         assert_eq!(decoded.sample_rate, 48_000);
         assert_eq!(decoded.samples.len(), 4);
-        assert!(decoded.samples[1] > 0.94);
-        assert!(decoded.samples[2] <= -0.94);
-        assert!(decoded.samples.iter().all(|sample| sample.abs() <= 0.951));
+        assert!(decoded.samples[1] > 0.89);
+        assert!(decoded.samples[2] <= -0.89);
+        assert!(decoded.samples.iter().all(|sample| sample.abs() <= 0.901));
     }
 
     #[test]
@@ -220,5 +222,16 @@ mod tests {
         let error = decode(path.to_str().unwrap()).unwrap_err();
         fs::remove_file(path).unwrap();
         assert!(error.to_string().contains("larger than"));
+    }
+
+    #[test]
+    fn normalizes_audible_peaks_but_does_not_raise_near_silence() {
+        let mut audible = [0.1, -0.2, 0.05];
+        normalize_peak(&mut audible);
+        assert!((audible[1] + 0.9).abs() < 0.0001);
+
+        let mut near_silent = [0.001, -0.002];
+        normalize_peak(&mut near_silent);
+        assert_eq!(near_silent, [0.001, -0.002]);
     }
 }

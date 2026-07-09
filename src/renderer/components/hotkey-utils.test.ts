@@ -14,6 +14,8 @@ const clips: SoundClip[] = [
     favorite: false,
     hotkey: "CommandOrControl+H",
     volume: 1,
+    trimStart: 0,
+    trimEnd: 0,
     loop: false,
     broadcast: true,
   },

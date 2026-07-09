@@ -136,6 +136,8 @@ export class LibraryStore {
         filePath,
         favorite: false,
         volume: 1,
+        trimStart: 0,
+        trimEnd: 0,
         loop: false,
         broadcast: true,
       });
@@ -196,6 +198,8 @@ export class LibraryStore {
         filePath: dest,
         favorite: false,
         volume: 1,
+        trimStart: 0,
+        trimEnd: 0,
         loop: false,
         broadcast: true,
         contentHash,
@@ -302,6 +306,8 @@ function normalizeClip(clip: SoundClip): SoundClip {
     ...rest,
     favorite: Boolean(clip.favorite),
     volume: clamp01(Number.isFinite(clip.volume) ? clip.volume : 1),
+    trimStart: sanitizeTrim(clip.trimStart),
+    trimEnd: sanitizeTrim(clip.trimEnd),
     loop: Boolean(clip.loop),
     broadcast: clip.broadcast !== false,
   };
@@ -322,6 +328,12 @@ export function sanitizeClipPatch(patch: SoundClipPatch): SoundClipPatch {
     }
   }
   if (typeof patch.volume === "number") next.volume = clamp01(patch.volume);
+  if (typeof patch.trimStart === "number") {
+    next.trimStart = sanitizeTrim(patch.trimStart);
+  }
+  if (typeof patch.trimEnd === "number") {
+    next.trimEnd = sanitizeTrim(patch.trimEnd);
+  }
   if (typeof patch.loop === "boolean") next.loop = patch.loop;
   if (typeof patch.broadcast === "boolean") next.broadcast = patch.broadcast;
   return next;
@@ -329,6 +341,12 @@ export function sanitizeClipPatch(patch: SoundClipPatch): SoundClipPatch {
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
+}
+
+function sanitizeTrim(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(600, value))
+    : 0;
 }
 
 function isInsideDir(filePath: string, dir: string): boolean {

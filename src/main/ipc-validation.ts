@@ -97,6 +97,10 @@ export function validateSoundClipPatch(value: unknown): SoundClipPatch {
       case "volume":
         patch.volume = requireFiniteNumber(raw, key);
         break;
+      case "trimStart":
+      case "trimEnd":
+        patch[key] = requireFiniteNumber(raw, key);
+        break;
       case "hotkey":
         patch.hotkey = requireNullableString(raw, key);
         break;
