@@ -6,14 +6,16 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LibraryStore, sanitizeClipPatch } from "./library";
 
 const roots: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(
     roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
   );
@@ -254,5 +256,52 @@ describe("LibraryStore", () => {
       broadcast: false,
       favorite: true,
     });
+  });
+
+  it("serializes concurrent removals without temporary-file rename failures", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
+    roots.push(root);
+    const sounds = path.join(root, "sounds");
+    const db = path.join(root, "library.json");
+    await mkdir(sounds);
+    const sources = await Promise.all(
+      Array.from({ length: 12 }, async (_, index) => {
+        const source = path.join(root, `${index}.wav`);
+        await writeFile(source, `audio-${index}`);
+        return source;
+      }),
+    );
+
+    const store = new LibraryStore();
+    await store.init(db, sounds);
+    const clips = (await store.importFiles(sources)).added;
+
+    await expect(
+      Promise.all(clips.map((clip) => store.removeClip(clip.id))),
+    ).resolves.toHaveLength(clips.length);
+    expect(store.getClips()).toEqual([]);
+    expect(JSON.parse(await readFile(db, "utf8"))).toEqual({ clips: [] });
+  });
+
+  it("keeps clip metadata when the managed file cannot be deleted", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "soundgrid-library-"));
+    roots.push(root);
+    const sounds = path.join(root, "sounds");
+    const db = path.join(root, "library.json");
+    const source = path.join(root, "locked.wav");
+    await mkdir(sounds);
+    await writeFile(source, "audio fixture");
+
+    const store = new LibraryStore();
+    await store.init(db, sounds);
+    const [clip] = (await store.importFiles([source])).added;
+    const failure = Object.assign(new Error("file is locked"), {
+      code: "EPERM",
+    });
+    vi.spyOn(fs, "unlink").mockRejectedValueOnce(failure);
+
+    await expect(store.removeClip(clip.id)).rejects.toBe(failure);
+    expect(store.byId(clip.id)).toEqual(clip);
+    expect(JSON.parse(await readFile(db, "utf8")).clips).toHaveLength(1);
   });
 });

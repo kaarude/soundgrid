@@ -1,10 +1,11 @@
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import { DEFAULT_SETTINGS, Settings } from "../shared/types.js";
+import { SerializedFileWriter } from "./serialized-file-writer.js";
 
 export class SettingsStore {
   private filePath = "";
   private settings: Settings = { ...DEFAULT_SETTINGS };
+  private writer = new SerializedFileWriter();
 
   async init(filePath: string) {
     this.filePath = filePath;
@@ -32,14 +33,10 @@ export class SettingsStore {
   }
 
   private async persist() {
-    const temporary = `${this.filePath}.tmp`;
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    await fs.writeFile(
-      temporary,
+    await this.writer.write(
+      this.filePath,
       JSON.stringify(this.settings, null, 2),
-      "utf8",
     );
-    await fs.rename(temporary, this.filePath);
   }
 }
 

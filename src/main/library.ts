@@ -15,6 +15,7 @@ import {
   SoundClip,
   SoundClipPatch,
 } from "../shared/types.js";
+import { SerializedFileWriter } from "./serialized-file-writer.js";
 
 const SUPPORTED = new Set([
   ".aif",
@@ -42,6 +43,7 @@ export class LibraryStore {
   private clips: SoundClip[] = [];
   private watcher?: FSWatcher;
   private watchTimer?: NodeJS.Timeout;
+  private writer = new SerializedFileWriter();
 
   async init(dbPath: string, soundsDir: string) {
     this.dbPath = dbPath;
@@ -212,8 +214,8 @@ export class LibraryStore {
     if (isInsideDir(clip.filePath, this.soundsDir)) {
       try {
         await fs.unlink(clip.filePath);
-      } catch {
-        /* file already gone */
+      } catch (error) {
+        if (!isNodeError(error, "ENOENT")) throw error;
       }
     }
     this.clips = this.clips.filter((c) => c.id !== id);
@@ -251,10 +253,19 @@ export class LibraryStore {
 
   private async persist() {
     const file: LibraryFile = { clips: this.clips };
-    const temporary = `${this.dbPath}.tmp`;
-    await fs.writeFile(temporary, JSON.stringify(file, null, 2), "utf8");
-    await fs.rename(temporary, this.dbPath);
+    await this.writer.write(this.dbPath, JSON.stringify(file, null, 2));
   }
+}
+
+function isNodeError(
+  error: unknown,
+  code: string,
+): error is NodeJS.ErrnoException {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === code
+  );
 }
 
 async function backupCorruptFile(filePath: string): Promise<void> {
