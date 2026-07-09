@@ -11,3 +11,5 @@ workflow. Public releases must be code-signed before being presented as stable.
 
 The bundled VB-CABLE archive is downloaded from VB-Audio and checked against a
 pinned SHA-256 during the release build. It remains third-party donationware.
+BlackHole is installed separately from Existential Audio on macOS and is never
+downloaded or executed silently by SoundGrid.

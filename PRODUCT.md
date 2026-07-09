@@ -6,7 +6,7 @@ product
 
 ## Users
 
-A blend of three overlapping audiences, all on a desktop, often in a dim room, with their attention somewhere *other* than the app:
+A blend of three overlapping audiences, all on a desktop, often in a dim room, with their attention somewhere _other_ than the app:
 
 - **Gamers mid-match** — low ambient light, one hand on the game, firing clips from memory via hotkeys. The app is peripheral vision: a glance, never a focus.
 - **Streamers and casters** — on-stage comedic timing. They queue bits for an audience; their eyes are on the scene, not the soundboard. Reliability and instant stop-matter more than discovery.
@@ -16,16 +16,16 @@ The shared job: **fire a sound clip into the microphone stream so other people h
 
 ## Product Purpose
 
-SoundGrid is an open-source, Windows-first (cross-platform later) soundboard that plays audio clips directly into the active microphone stream via a virtual audio device, so games, Discord, OBS, and any voice app receive the clips as mic input. No extra hardware. Distributed as a single `.exe`.
+SoundGrid is an open-source Windows and macOS soundboard that plays audio clips directly into the active microphone stream via a virtual audio device, so games, Discord, OBS, and any voice app receive the clips as mic input. No extra hardware. Distributed as a Windows installer or a universal macOS `.dmg`.
 
-It exists because the only polished tools that do this are commercial; an open-source alternative should be free, auditable, and not dependent on a paid driver. The product's defining technical commitment is the **two-bus audio model**: a *mic bus* (sent to a virtual cable, heard by others) and a *monitor bus* (sent to headphones, heard only by you), each with independent play/pause/stop/mute/volume. That distinction *is* the product — it must be impossible to confuse which bus a clip is going to.
+It exists because the only polished tools that do this are commercial; an open-source alternative should be free, auditable, and not dependent on a paid driver. The product's defining technical commitment is the **two-bus audio model**: a _mic bus_ (sent to a virtual cable, heard by others) and a _monitor bus_ (sent to headphones, heard only by you), each with independent play/pause/stop/mute/volume. That distinction _is_ the product — it must be impossible to confuse which bus a clip is going to.
 
 ## Brand Personality
 
 A deliberate tension between two registers, held together by restraint:
 
-- **Punchy + playful gamer-energy** in the *firing* surface — the act of triggering a clip should feel satisfying, immediate, a little fun. Quick haptic-feeling feedback, no ceremony.
-- **Calm + pro + precise like a mixer console** in the *control* surface — transport, routing, settings, and levels read as a trustworthy instrument. Nothing flashy where precision lives.
+- **Punchy + playful gamer-energy** in the _firing_ surface — the act of triggering a clip should feel satisfying, immediate, a little fun. Quick haptic-feeling feedback, no ceremony.
+- **Calm + pro + precise like a mixer console** in the _control_ surface — transport, routing, settings, and levels read as a trustworthy instrument. Nothing flashy where precision lives.
 
 Three-word feel: **immediate, instrumented, unpretentious.**
 
@@ -34,7 +34,7 @@ Emotional goal: the user never feels like they're fighting the tool. Triggering 
 ## Anti-references
 
 - **Cluttered freeware skin** — 2000s media-player chrome, faux-neon reflections, busy button stacks, every control visible at once. We are the opposite of this: only what the moment needs.
-- **Generic Electron gray** — the flat, defaulty, undifferentiated dark that every starter Electron template ships. No identity, no craft, "Dark Mode™" as a costume. SoundGrid must look like it was *designed*, not scaffolded.
+- **Generic Electron gray** — the flat, defaulty, undifferentiated dark that every starter Electron template ships. No identity, no craft, "Dark Mode™" as a costume. SoundGrid must look like it was _designed_, not scaffolded.
 
 We are NOT trying to be an over-designed "gamer RGB" skin (neon rainbows, aggressive glow) nor an over-minimal dark clone (so quiet it has no personality). The sweet spot is an instrument that happens to be fun.
 

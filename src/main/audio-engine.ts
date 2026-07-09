@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import {
+  AudioDevice,
   AudioDevices,
   AudioEngineEvent,
   Settings,
@@ -16,6 +17,7 @@ type Bus = "mic" | "monitor";
 interface NativeDevice {
   id: string;
   label: string;
+  kind?: AudioDevice["kind"];
 }
 
 type NativeEvent =

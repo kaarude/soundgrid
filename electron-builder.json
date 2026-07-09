@@ -41,14 +41,27 @@
     "shortcutName": "SoundGrid"
   },
   "mac": {
-    "target": ["dmg"],
+    "target": ["dmg", "zip"],
     "category": "public.app-category.music",
+    "icon": "native/audio-engine/target/packaging/icon.png",
+    "artifactName": "SoundGrid-${version}-macOS-${arch}.${ext}",
+    "hardenedRuntime": true,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+    "notarize": true,
+    "extendInfo": {
+      "NSMicrophoneUsageDescription": "SoundGrid mixes your microphone with soundboard clips only when passthrough is enabled. Audio stays on this Mac."
+    },
     "extraResources": [
       {
-        "from": "native/audio-engine/target/release/soundgrid-audio",
+        "from": "native/audio-engine/target/universal-apple-darwin/release/soundgrid-audio",
         "to": "native/soundgrid-audio"
       }
     ]
+  },
+  "dmg": {
+    "title": "SoundGrid ${version}",
+    "artifactName": "SoundGrid-${version}-macOS-${arch}.${ext}"
   },
   "linux": {
     "target": ["AppImage"],

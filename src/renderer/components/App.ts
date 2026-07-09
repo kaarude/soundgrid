@@ -160,7 +160,7 @@ async function boot(): Promise<void> {
   try {
     store.update({ cableStatus: await window.soundgrid.getCableStatus() });
   } catch (error) {
-    console.error("Could not check VB-CABLE:", error);
+    console.error("Could not check the virtual audio cable:", error);
   }
 }
 

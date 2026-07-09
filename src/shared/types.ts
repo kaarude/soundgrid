@@ -108,6 +108,10 @@ export interface CableStatus {
   installed: boolean;
   canInstall: boolean;
   rebootRequired: boolean;
+  name: string;
+  installLabel: string;
+  websiteLabel: string;
+  attribution: string;
   message: string;
 }
 

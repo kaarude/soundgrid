@@ -11,6 +11,7 @@ import {
   reconcileAudioRouting,
   routeIsAvailable,
   selectableMonitorDevices,
+  selectableRealMicDevices,
 } from "../../shared/routing";
 
 // Settings drawer, opened from the topbar gear. Routing + toggles.
@@ -122,6 +123,15 @@ function renderSettingsBody(): void {
 
   const routing = group("Routing");
   routing.append(deviceSummary());
+  const refreshDevices = document.createElement("button");
+  refreshDevices.type = "button";
+  refreshDevices.className = "settings-action routing-refresh";
+  refreshDevices.textContent = "Refresh audio devices";
+  refreshDevices.addEventListener(
+    "click",
+    () => void refreshAudioDevices(refreshDevices),
+  );
+  routing.append(refreshDevices);
   routing.append(
     deviceField(
       "Mic output device",
@@ -140,7 +150,7 @@ function renderSettingsBody(): void {
     deviceField(
       "Real mic (passthrough)",
       "realMicDeviceId",
-      d.realMics,
+      selectableRealMicDevices(d, s),
       s.realMicDeviceId,
       "Mixed into the mic output so your voice is still heard.",
     ),
@@ -240,7 +250,7 @@ function hotkeyField(
     );
     store.update({ settings: result.settings });
     hint.textContent = failure
-      ? "Windows or another application is already using that shortcut."
+      ? "The operating system or another application is already using that shortcut."
       : "Saved. This shortcut works while SoundGrid is in the background.";
     field.classList.toggle("is-error", Boolean(failure));
   });
@@ -255,7 +265,7 @@ function cableInstaller(): HTMLElement {
 
   const copy = document.createElement("div");
   const title = document.createElement("strong");
-  title.textContent = "VB-CABLE";
+  title.textContent = status?.name ?? "Virtual audio cable";
   const description = document.createElement("p");
   description.textContent =
     status?.message ?? "Checking whether the virtual audio cable is installed…";
@@ -269,15 +279,15 @@ function cableInstaller(): HTMLElement {
     install.className = "settings-action settings-action--primary";
     install.disabled = !status.canInstall || store.state.cableInstalling;
     install.textContent = store.state.cableInstalling
-      ? "Installing…"
-      : "Install VB-CABLE";
+      ? "Working…"
+      : status.installLabel;
     install.addEventListener("click", () => void installCable());
     actions.append(install);
   }
   const donate = document.createElement("button");
   donate.type = "button";
   donate.className = "settings-action";
-  donate.textContent = "VB-Audio donation page";
+  donate.textContent = status?.websiteLabel ?? "Learn more";
   donate.addEventListener(
     "click",
     () => void window.soundgrid.openCableDonation(),
@@ -287,7 +297,7 @@ function cableInstaller(): HTMLElement {
   const attribution = document.createElement("p");
   attribution.className = "cable-attribution";
   attribution.textContent =
-    "VB-CABLE is separate donationware by VB-Audio Software. All participation is welcome.";
+    status?.attribution ?? "A compatible virtual audio device is required.";
   panel.append(copy, actions, attribution);
   return panel;
 }
@@ -303,8 +313,31 @@ async function installCable(): Promise<void> {
       audioError:
         error instanceof Error
           ? error.message
-          : "VB-CABLE installation failed.",
+          : "Could not open the virtual audio cable installer.",
     });
+  }
+}
+
+async function refreshAudioDevices(button: HTMLButtonElement): Promise<void> {
+  button.disabled = true;
+  button.textContent = "Refreshing…";
+  try {
+    const devices = await window.soundgrid.listDevices();
+    const cableStatus = await window.soundgrid.getCableStatus();
+    store.update({ devices, devicesStatus: "ready", cableStatus });
+    const patch = reconcileAudioRouting(store.state.settings, devices);
+    if (Object.keys(patch).length) await persistSettings(patch);
+  } catch (error) {
+    store.update({
+      devicesStatus: "error",
+      audioError:
+        error instanceof Error
+          ? error.message
+          : "Could not refresh audio devices.",
+    });
+  } finally {
+    button.disabled = false;
+    button.textContent = "Refresh audio devices";
   }
 }
 
@@ -471,8 +504,12 @@ async function persistSettings(patch: Partial<Settings>): Promise<void> {
       store.update({ settings: routed.settings });
     }
     setSaveStatus("saved", "Saved");
-  } catch {
+  } catch (error) {
     setSaveStatus("error", "Could not save. Try again.");
+    store.update({
+      audioError:
+        error instanceof Error ? error.message : "Could not save settings.",
+    });
   }
 }
 
@@ -486,7 +523,10 @@ function deviceSummary(): HTMLElement {
       selectableMonitorDevices(devices, settings),
     ) &&
     (!settings.passthrough ||
-      routeIsAvailable(settings.realMicDeviceId, devices.realMics));
+      routeIsAvailable(
+        settings.realMicDeviceId,
+        selectableRealMicDevices(devices, settings),
+      ));
   const visualStatus =
     devicesStatus === "ready" && !routingComplete ? "error" : devicesStatus;
   summary.className = `routing-status routing-status--${visualStatus}`;

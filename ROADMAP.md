@@ -2,12 +2,12 @@
 
 What's left to ship, grouped by phase. Each item is a **feature/function** with a description and a goal — no implementation detail or code. Checkboxes track whether a phase is started; they are not individual tickets.
 
-**Current status (already done):** Electron + TypeScript + Vite shell; main process (window, tray, IPC, library/settings stores, hotkey manager); Rust native audio sidecar with CPAL/WASAPI device I/O, Symphonia decoding, independent mic/monitor buses, real-mic passthrough, overlap modes, and real peak metering; native device enumeration; preload bridge; the full "Cue Rack" renderer UI; persisted routing; verified VB-CABLE payload download and guided installer; Windows NSIS packaging and release CI.
+**Current status (already done):** Electron + TypeScript + Vite shell; main process (window, tray, IPC, library/settings stores, hotkey manager); Rust native audio sidecar with CPAL/WASAPI and CoreAudio device I/O, Symphonia decoding, independent mic/monitor buses, real-mic passthrough, overlap modes, and real peak metering; native device enumeration; preload bridge; the full "Cue Rack" renderer UI; persisted routing; guided VB-CABLE and BlackHole setup; Windows NSIS and universal macOS DMG/ZIP packaging; cross-platform release CI.
 
 **Locked decisions driving this roadmap:**
 
-- Audio enters the mic via a **bundled, free virtual audio cable** that we auto-configure — not by shipping our own kernel driver, and not by leaving the user to find one.
-- **Windows-only** for now. macOS is a vague future phase; kept light here.
+- Audio enters the mic via a free virtual audio cable: bundled VB-CABLE on Windows and guided BlackHole setup on macOS. SoundGrid does not ship its own kernel or CoreAudio driver.
+- **Windows and macOS** are supported with the same Cue Rack UI, two-bus routing, library, hotkeys, tray controls, settings, and updater.
 - **Voice changer** is a future full system: pitch/formant + effects chain + presets + per-clip voice profiles.
 
 **One hard dependency to resolve early:** we must pick a virtual audio driver we are **legally allowed to redistribute** inside an open-source installer. VB-CABLE is donationware and its redistribution terms need explicit permission; some OSS driver projects exist but are old/maintenance-only. This is decision gate **G1** (see Cross-cutting) and it gates Phase 0.
@@ -199,18 +199,18 @@ A full real-time voice transformation system on top of the existing two-bus engi
 
 ---
 
-## Phase 5 (Future, vague) — macOS port
+## Phase 5 — macOS port ✅
 
-Kept light until Windows is shipped and proven.
+The macOS port preserves the same product surface while using native CoreAudio and Apple platform conventions underneath.
 
-### 5.1 CoreAudio engine + loopback cable
+### 5.1 CoreAudio engine + loopback cable ✅ _(BlackHole hardware loopback validation pending)_
 
-- **Description:** A macOS audio backend (CoreAudio) and a bundled/recommended loopback device (e.g. BlackHole) for mic injection, with the same two-bus model.
+- **Description:** The existing native sidecar now runs on CoreAudio and classifies macOS devices, recommends BlackHole for mic injection, safely auto-selects loopback without ever choosing physical speakers as the mic route, and preserves the same two-bus model.
 - **Goal:** Feature parity on macOS for the core soundboard (clips → mic).
 
-### 5.2 Platform specifics
+### 5.2 Platform specifics ✅ _(Developer ID credentials pending)_
 
-- **Description:** TCC microphone permission flow, global hotkeys via Accessibility permission, `.dmg` build/signing/notarization, and run-on-startup via Login Items.
+- **Description:** TCC microphone consent is requested when passthrough is enabled; normal global accelerators use Electron's native macOS shortcut registration without unnecessary Accessibility access; universal Intel/Apple Silicon DMG and updater ZIP builds carry hardened-runtime entitlements and notarization configuration; run-on-startup uses Login Items.
 - **Goal:** A first-class macOS app that respects Apple's permission model and notarization requirements.
 
 ---
@@ -255,4 +255,4 @@ Kept light until Windows is shipped and proven.
 3. **Phase 3.1–3.3** (ship a Windows build + CI) — get a downloadable, signed `.exe` out.
 4. **Phase 2** (polish) — onboarding, a11y, performance, error states.
 5. **Phase 4** (voice changer) — once the core is stable and shipped.
-6. **Phase 5** (macOS) — only once Windows is proven and there's demand.
+6. **Phase 5** (macOS) — shipped in v0.2.0; complete signed-release validation after Developer ID credentials are added.

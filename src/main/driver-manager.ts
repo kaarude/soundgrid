@@ -5,19 +5,12 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { CableStatus } from "../shared/types.js";
 import { AudioEngine } from "./audio-engine.js";
 
 const execFileAsync = promisify(execFile);
 const VB_CABLE_ARCHIVE_SHA256 =
   "b950e39f01af1d04ea623c8f6d8eb9b6ea5c477c637295fabf20631c85116bfb";
-
-export interface CableStatus {
-  supported: boolean;
-  installed: boolean;
-  canInstall: boolean;
-  rebootRequired: boolean;
-  message: string;
-}
 
 export class DriverManager {
   private rebootRequired = false;
@@ -25,13 +18,38 @@ export class DriverManager {
   constructor(private readonly audio: AudioEngine) {}
 
   async status(): Promise<CableStatus> {
+    if (process.platform === "darwin") {
+      const devices = await this.audio.listDevices();
+      const installed = devices.micOutputs.some((device) =>
+        /blackhole|soundflower|loopback audio/i.test(device.label),
+      );
+      return {
+        supported: true,
+        installed,
+        canInstall: true,
+        rebootRequired: false,
+        name: "BlackHole",
+        installLabel: "Open BlackHole installer",
+        websiteLabel: "BlackHole project page",
+        attribution:
+          "BlackHole is a separate open-source macOS audio loopback driver by Existential Audio.",
+        message: installed
+          ? "A macOS loopback device is installed and ready to select as the mic output."
+          : "BlackHole 2ch is required to send clips into voice applications on macOS. The installer opens in your browser.",
+      };
+    }
     if (process.platform !== "win32") {
       return {
         supported: false,
         installed: false,
         canInstall: false,
         rebootRequired: false,
-        message: "VB-CABLE installation is available in the Windows build.",
+        name: "Virtual audio cable",
+        installLabel: "Install virtual audio cable",
+        websiteLabel: "Learn more",
+        attribution: "A compatible virtual audio device is required.",
+        message:
+          "Guided virtual audio cable setup is available on Windows and macOS.",
       };
     }
     const devices = await this.audio.listDevices();
@@ -43,6 +61,11 @@ export class DriverManager {
       installed,
       canInstall: Boolean(findPackage()),
       rebootRequired: this.rebootRequired,
+      name: "VB-CABLE",
+      installLabel: "Install VB-CABLE",
+      websiteLabel: "VB-Audio donation page",
+      attribution:
+        "VB-CABLE is separate donationware by VB-Audio Software. All participation is welcome.",
       message: installed
         ? "VB-CABLE is installed and ready to select as the mic output."
         : this.rebootRequired
@@ -52,6 +75,10 @@ export class DriverManager {
   }
 
   async install(): Promise<CableStatus> {
+    if (process.platform === "darwin") {
+      await shell.openExternal("https://existential.audio/blackhole/");
+      return this.status();
+    }
     if (process.platform !== "win32") return this.status();
     const archive = findPackage();
     if (!archive)
@@ -94,6 +121,9 @@ export class DriverManager {
   }
 
   openDonationPage(): Promise<void> {
+    if (process.platform === "darwin") {
+      return shell.openExternal("https://existential.audio/blackhole/");
+    }
     return shell.openExternal(
       "https://shop.vb-audio.com/en/win-apps/11-vb-cable.html",
     );

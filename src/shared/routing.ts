@@ -23,9 +23,31 @@ export function selectableMonitorDevices(
 ): AudioDevice[] {
   if (!settings.headsetOnly) return devices.monitors;
   const headphones = devices.monitors.filter(isHeadphoneDevice);
-  // Device metadata is not complete on every backend. Do not make routing
-  // impossible merely because a localized device name could not be classified.
-  return headphones.length ? headphones : devices.monitors;
+  if (headphones.length) return headphones;
+  // Unknown devices remain eligible because some backends/localized names do
+  // not expose a useful type. Known speakers and loopback devices never do.
+  return devices.monitors.filter(
+    (device) =>
+      device.kind !== "speaker" &&
+      device.kind !== "virtual" &&
+      !/speaker|lautsprecher|blackhole|soundflower|loopback audio|cable/i.test(
+        device.label,
+      ),
+  );
+}
+
+export function selectableRealMicDevices(
+  devices: AudioDevices,
+  settings: Pick<Settings, "micOutputDeviceId">,
+): AudioDevice[] {
+  return devices.realMics.filter(
+    (device) =>
+      device.id !== settings.micOutputDeviceId &&
+      device.kind !== "virtual" &&
+      !/blackhole|soundflower|loopback audio|cable input|vb-audio/i.test(
+        device.label,
+      ),
+  );
 }
 
 export function reconcileAudioRouting(
@@ -66,9 +88,15 @@ export function reconcileAudioRouting(
   }
   if (
     withPatch().passthrough &&
-    !deviceExists(withPatch().realMicDeviceId, devices.realMics)
+    !deviceExists(
+      withPatch().realMicDeviceId,
+      selectableRealMicDevices(devices, withPatch()),
+    )
   ) {
-    setIfChanged("realMicDeviceId", devices.realMics[0]?.id ?? null);
+    setIfChanged(
+      "realMicDeviceId",
+      selectableRealMicDevices(devices, withPatch())[0]?.id ?? null,
+    );
   }
 
   return patch;
@@ -83,10 +111,13 @@ export function routeIsAvailable(
 
 function preferredMicOutput(devices: AudioDevices): string | null {
   return (
-    devices.micOutputs.find((device) => /cable input/i.test(device.label))
-      ?.id ??
-    devices.micOutputs[0]?.id ??
-    null
+    devices.micOutputs.find(
+      (device) =>
+        device.kind === "virtual" ||
+        /cable input|vb-audio.*cable|blackhole|soundflower|loopback audio/i.test(
+          device.label,
+        ),
+    )?.id ?? null
   );
 }
 
@@ -96,7 +127,11 @@ function preferredMonitor(
 ): string | null {
   const eligible = selectableMonitorDevices(devices, settings);
   return (
-    eligible.find((device) => !/cable/i.test(device.label))?.id ??
+    eligible.find(
+      (device) =>
+        device.kind !== "virtual" &&
+        !/cable|blackhole|soundflower|loopback audio/i.test(device.label),
+    )?.id ??
     eligible[0]?.id ??
     null
   );
