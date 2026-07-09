@@ -436,10 +436,8 @@ describe("AudioEngine bridge", () => {
     const { engine, transcript } = makeEngine();
     await engine.start(baseSettings);
     engine.shutdown();
-    // The graceful shutdown command races with the SIGTERM kill fallback, so
-    // the observable guarantee is that the sidecar stops (it logs either the
-    // shutdown command or the kill) and the bridge drops readiness so further
-    // commands become no-ops.
+    // The bridge gives the sidecar a short graceful-exit window before its
+    // kill fallback and drops readiness immediately so later calls are no-ops.
     const cmds = (await waitForCommands(transcript, 2)) as Record<
       string,
       unknown
