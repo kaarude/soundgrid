@@ -51,7 +51,7 @@ Import: **MP3, WAV, OGG/OGA, FLAC, M4A/AAC, OPUS, WebM-audio**.
 
 ## Tech stack
 
-- **Electron 33** — desktop shell
+- **Electron 43** — desktop shell
 - **Rust + CPAL** — native WASAPI/CoreAudio device I/O, mixing, passthrough, and metering
 - **Symphonia** — native clip decoding
 - **TypeScript** — end-to-end, strict mode
@@ -132,7 +132,7 @@ pnpm dist:mac
 
 The result is a universal DMG plus the ZIP metadata required by automatic updates. SoundGrid detects BlackHole, Soundflower, and Loopback-compatible outputs, and guides new users to the open-source BlackHole 2ch installer. BlackHole is installed separately and is not covered by SoundGrid's MIT license.
 
-For public distribution, configure `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, and `APPLE_TEAM_ID` as GitHub Actions secrets. The release workflow then signs with Developer ID, applies the hardened-runtime audio-input entitlement, notarizes with Apple, and staples the result. Without these credentials, local and CI builds are unsigned development artifacts.
+For public distribution, configure `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_API_KEY_BASE64`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, and `APPLE_TEAM_ID` as GitHub Actions secrets. `APPLE_API_KEY_BASE64` is the base64-encoded `.p8` key; CI materializes it only for the build. The release workflow then signs with Developer ID, applies the hardened-runtime audio-input entitlement, notarizes with Apple, staples the result, and verifies all three operations. Stable tags fail closed when any credential is absent. Hyphenated tags such as `v0.2.0-beta.1` intentionally publish unsigned prerelease artifacts instead.
 
 ## Roadmap
 

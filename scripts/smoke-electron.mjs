@@ -7,9 +7,16 @@ import electron from "electron";
 const port = 19_000 + Math.floor(Math.random() * 1_000);
 const userData = await mkdtemp(path.join(tmpdir(), "soundgrid-smoke-"));
 const output = [];
+const packagedExecutable = process.env.SOUNDGRID_SMOKE_EXECUTABLE;
+const command = packagedExecutable || electron;
+const appArgs = packagedExecutable ? [] : ["."];
 const child = spawn(
-  electron,
-  [".", `--remote-debugging-port=${port}`, `--user-data-dir=${userData}`],
+  command,
+  [
+    ...appArgs,
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${userData}`,
+  ],
   {
     cwd: process.cwd(),
     env: { ...process.env, SOUNDGRID_TEST_UPDATE_VERSION: "9.9.9" },
@@ -20,7 +27,6 @@ child.stdout.on("data", (chunk) => output.push(chunk.toString()));
 child.stderr.on("data", (chunk) => output.push(chunk.toString()));
 
 try {
-  const page = await waitForPage(port);
   const expressions = [
     "typeof window.soundgrid",
     "Boolean(document.querySelector('.app'))",
@@ -31,13 +37,16 @@ try {
   let values = [];
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
-    values = await evaluate(page.webSocketDebuggerUrl, expressions);
-    if (
-      values[0] === "object" &&
-      values[1] === true &&
-      values[2] === "Update 9.9.9" &&
-      values[3] === false
-    ) {
+    try {
+      values = await evaluatePage(port, expressions);
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      continue;
+    }
+    const updateReady = packagedExecutable
+      ? true
+      : values[2] === "Update 9.9.9" && values[3] === false;
+    if (values[0] === "object" && values[1] === true && updateReady) {
       break;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -45,15 +54,15 @@ try {
   if (
     values[0] !== "object" ||
     values[1] !== true ||
-    values[2] !== "Update 9.9.9" ||
-    values[3] !== false
+    (!packagedExecutable &&
+      (values[2] !== "Update 9.9.9" || values[3] !== false))
   ) {
     throw new Error(
       `Renderer smoke test failed: ${JSON.stringify(values)}\n${output.join("")}`,
     );
   }
-  const compact = await evaluate(
-    page.webSocketDebuggerUrl,
+  const compact = await evaluatePage(
+    port,
     [
       "document.documentElement.scrollWidth === innerWidth",
       "document.querySelector('.topbar')?.scrollWidth <= document.querySelector('.topbar')?.clientWidth",
@@ -85,6 +94,20 @@ try {
     maxRetries: 5,
     retryDelay: 150,
   });
+}
+
+async function evaluatePage(debugPort, expressions, viewport) {
+  let lastError;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const page = await waitForPage(debugPort);
+    try {
+      return await evaluate(page.webSocketDebuggerUrl, expressions, viewport);
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  throw lastError;
 }
 
 async function waitForPage(debugPort) {

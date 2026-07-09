@@ -206,6 +206,22 @@ impl Engine {
         } else {
             None
         };
+        let capture_device = if passthrough && mic_device.is_some() {
+            anyhow::ensure!(
+                mic_output_id.as_deref() != real_mic_id.as_deref(),
+                "real microphone cannot be the mic output loopback device"
+            );
+            let input = select(&self.host, real_mic_id.as_deref())?;
+            if let Some(device) = &input {
+                anyhow::ensure!(
+                    !is_virtual_input(device)?,
+                    "real microphone cannot be a virtual loopback device"
+                );
+            }
+            input
+        } else {
+            None
+        };
 
         if let Some(device) = mic_device {
             self.mic_stream = Some(build_output(
@@ -228,10 +244,8 @@ impl Engine {
             )?);
         }
 
-        if passthrough && self.mic_stream.is_some() {
-            if let Some(input) = select(&self.host, real_mic_id.as_deref())? {
-                self.capture_stream = Some(build_input(&input, self.capture.clone())?);
-            }
+        if let Some(input) = capture_device {
+            self.capture_stream = Some(build_input(&input, self.capture.clone())?);
         }
 
         if let Some(stream) = &self.mic_stream {
@@ -498,6 +512,22 @@ fn infer_device_kind(label: &str, direction: DeviceDirection) -> DeviceKind {
         }
         _ => DeviceKind::Unknown,
     }
+}
+
+fn is_virtual_input(device: &Device) -> Result<bool> {
+    let description = device
+        .description()
+        .context("cannot read input device description")?;
+    let label = description
+        .extended()
+        .first()
+        .map(String::as_str)
+        .unwrap_or(description.name());
+    Ok(matches!(description.device_type(), DeviceType::Virtual)
+        || matches!(
+            infer_device_kind(label, DeviceDirection::Input),
+            DeviceKind::Virtual
+        ))
 }
 
 fn build_output(

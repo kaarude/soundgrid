@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clipBuses,
   reconcileAudioRouting,
+  selectableRealMicDevices,
   selectableMonitorDevices,
 } from "./routing";
 import { AudioDevices, DEFAULT_SETTINGS, Settings, SoundClip } from "./types";
@@ -63,7 +64,7 @@ describe("selectableMonitorDevices", () => {
     ).toEqual(devices.monitors);
   });
 
-  it("recognizes localized headphones and falls back safely for unknown labels", () => {
+  it("recognizes localized headphones and falls back only to unknown devices", () => {
     const localized: AudioDevices = {
       ...devices,
       monitors: [
@@ -82,6 +83,39 @@ describe("selectableMonitorDevices", () => {
     expect(
       selectableMonitorDevices(unknown, settings({ headsetOnly: true })),
     ).toEqual(unknown.monitors);
+  });
+
+  it("never exposes known speakers or virtual devices in headset-only mode", () => {
+    const macDevices: AudioDevices = {
+      micOutputs: [],
+      monitors: [
+        { id: "speaker", label: "MacBook Pro Speakers", kind: "speaker" },
+        { id: "blackhole", label: "BlackHole 2ch", kind: "virtual" },
+      ],
+      realMics: [],
+    };
+    expect(
+      selectableMonitorDevices(macDevices, settings({ headsetOnly: true })),
+    ).toEqual([]);
+  });
+});
+
+describe("selectableRealMicDevices", () => {
+  it("excludes loopback devices and the active mic output", () => {
+    const macDevices: AudioDevices = {
+      micOutputs: [{ id: "blackhole", label: "BlackHole 2ch" }],
+      monitors: [],
+      realMics: [
+        { id: "blackhole", label: "BlackHole 2ch", kind: "virtual" },
+        { id: "soundflower", label: "Soundflower (2ch)" },
+        { id: "mic", label: "MacBook Pro Microphone", kind: "microphone" },
+      ],
+    };
+    expect(
+      selectableRealMicDevices(macDevices, {
+        micOutputDeviceId: "blackhole",
+      }),
+    ).toEqual([macDevices.realMics[2]]);
   });
 });
 
@@ -190,5 +224,43 @@ describe("reconcileAudioRouting", () => {
         physicalOnly,
       ),
     ).toEqual({ monitorDeviceId: "speakers" });
+  });
+
+  it("leaves the monitor unset when headset-only mode finds no headphones", () => {
+    const macDevices: AudioDevices = {
+      micOutputs: [
+        { id: "speakers", label: "MacBook Pro Speakers", kind: "speaker" },
+        { id: "blackhole", label: "BlackHole 2ch", kind: "virtual" },
+      ],
+      monitors: [
+        { id: "speakers", label: "MacBook Pro Speakers", kind: "speaker" },
+        { id: "blackhole", label: "BlackHole 2ch", kind: "virtual" },
+      ],
+      realMics: [],
+    };
+    expect(reconcileAudioRouting(settings(), macDevices)).toEqual({
+      micOutputDeviceId: "blackhole",
+    });
+  });
+
+  it("does not auto-select a loopback device for passthrough", () => {
+    const macDevices: AudioDevices = {
+      micOutputs: [{ id: "blackhole-out", label: "BlackHole 2ch" }],
+      monitors: [{ id: "headphones", label: "USB Headphones" }],
+      realMics: [
+        { id: "blackhole-in", label: "BlackHole 2ch", kind: "virtual" },
+        { id: "mic", label: "MacBook Pro Microphone", kind: "microphone" },
+      ],
+    };
+    expect(
+      reconcileAudioRouting(
+        settings({ passthrough: true, realMicDeviceId: null }),
+        macDevices,
+      ),
+    ).toEqual({
+      micOutputDeviceId: "blackhole-out",
+      monitorDeviceId: "headphones",
+      realMicDeviceId: "mic",
+    });
   });
 });

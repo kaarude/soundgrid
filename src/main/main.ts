@@ -54,6 +54,7 @@ class SoundGrid {
     micMuted: false,
   };
   private updateState: UpdateState = { status: "idle" };
+  private startupWarning?: string;
 
   async start() {
     await app.whenReady();
@@ -67,6 +68,15 @@ class SoundGrid {
       this.win?.webContents.send(IPC.LIBRARY_CHANGED, clips),
     );
     await this.settings.init(path.join(userDataDir, "settings.json"));
+    if (
+      process.platform === "darwin" &&
+      this.settings.get().passthrough &&
+      !(await requestMacMicrophoneAccess())
+    ) {
+      await this.settings.set({ passthrough: false });
+      this.startupWarning =
+        "Microphone passthrough was turned off because SoundGrid no longer has microphone access. Allow it in System Settings → Privacy & Security → Microphone, restart SoundGrid, then enable passthrough again.";
+    }
     if (this.settings.get().runOnStartup) {
       app.setLoginItemSettings({ openAtLogin: true });
     }
@@ -118,6 +128,15 @@ class SoundGrid {
     this.win.webContents.setWindowOpenHandler(({ url }) => {
       if (isSafeExternalUrl(url)) void shell.openExternal(url);
       return { action: "deny" };
+    });
+
+    this.win.webContents.once("did-finish-load", () => {
+      if (!this.startupWarning) return;
+      this.win?.webContents.send(IPC.ON_STATE, {
+        type: "error",
+        message: this.startupWarning,
+      } satisfies AudioEngineEvent);
+      this.startupWarning = undefined;
     });
 
     this.win.webContents.on("will-navigate", (event, url) => {

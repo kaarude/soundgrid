@@ -11,6 +11,7 @@ import {
   reconcileAudioRouting,
   routeIsAvailable,
   selectableMonitorDevices,
+  selectableRealMicDevices,
 } from "../../shared/routing";
 
 // Settings drawer, opened from the topbar gear. Routing + toggles.
@@ -149,7 +150,7 @@ function renderSettingsBody(): void {
     deviceField(
       "Real mic (passthrough)",
       "realMicDeviceId",
-      d.realMics,
+      selectableRealMicDevices(d, s),
       s.realMicDeviceId,
       "Mixed into the mic output so your voice is still heard.",
     ),
@@ -522,7 +523,10 @@ function deviceSummary(): HTMLElement {
       selectableMonitorDevices(devices, settings),
     ) &&
     (!settings.passthrough ||
-      routeIsAvailable(settings.realMicDeviceId, devices.realMics));
+      routeIsAvailable(
+        settings.realMicDeviceId,
+        selectableRealMicDevices(devices, settings),
+      ));
   const visualStatus =
     devicesStatus === "ready" && !routingComplete ? "error" : devicesStatus;
   summary.className = `routing-status routing-status--${visualStatus}`;
