@@ -174,6 +174,7 @@ impl Engine {
         passthrough: bool,
         mic_volume: f32,
         monitor_volume: f32,
+        monitor_enabled: bool,
         overlap: MixMode,
     ) -> Result<()> {
         self.mic_stream = None;
@@ -193,8 +194,14 @@ impl Engine {
         }
 
         let mic_device = select(&self.host, mic_output_id.as_deref())?;
-        let monitor_device = select_output(&self.host, monitor_id.as_deref())?
-            .context("no monitor playback device is available")?;
+        let monitor_device = if monitor_enabled {
+            Some(
+                select_output(&self.host, monitor_id.as_deref())?
+                    .context("no monitor playback device is available")?,
+            )
+        } else {
+            None
+        };
 
         if let Some(device) = mic_device {
             self.mic_stream = Some(build_output(
@@ -206,14 +213,16 @@ impl Engine {
                 self.ended_tx.clone(),
             )?);
         }
-        self.monitor_stream = Some(build_output(
-            &monitor_device,
-            self.monitor.clone(),
-            None,
-            self.monitor_meter.clone(),
-            BusName::Monitor,
-            self.ended_tx.clone(),
-        )?);
+        if let Some(device) = monitor_device {
+            self.monitor_stream = Some(build_output(
+                &device,
+                self.monitor.clone(),
+                None,
+                self.monitor_meter.clone(),
+                BusName::Monitor,
+                self.ended_tx.clone(),
+            )?);
+        }
 
         if passthrough && self.mic_stream.is_some() {
             if let Some(input) = select(&self.host, real_mic_id.as_deref())? {
@@ -224,11 +233,9 @@ impl Engine {
         if let Some(stream) = &self.mic_stream {
             stream.play().context("cannot start mic output")?;
         }
-        self.monitor_stream
-            .as_ref()
-            .unwrap()
-            .play()
-            .context("cannot start monitor output")?;
+        if let Some(stream) = &self.monitor_stream {
+            stream.play().context("cannot start monitor output")?;
+        }
         if let Some(stream) = &self.capture_stream {
             stream.play().context("cannot start microphone capture")?;
         }
@@ -329,6 +336,7 @@ fn handle(engine: &mut Engine, command: Command) -> Result<bool> {
             passthrough,
             mic_volume,
             monitor_volume,
+            monitor_enabled,
             overlap,
         } => engine.configure(
             mic_output_device_id,
@@ -337,6 +345,7 @@ fn handle(engine: &mut Engine, command: Command) -> Result<bool> {
             passthrough,
             mic_volume,
             monitor_volume,
+            monitor_enabled,
             overlap,
         )?,
         Command::Play {

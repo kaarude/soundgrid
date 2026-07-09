@@ -15,6 +15,7 @@ pub enum Command {
         passthrough: bool,
         mic_volume: f32,
         monitor_volume: f32,
+        monitor_enabled: bool,
         overlap: MixMode,
     },
     Play {
@@ -126,6 +127,21 @@ mod tests {
         .unwrap();
         assert_eq!(event["clipId"], "clip");
         assert!(event.get("clip_id").is_none());
+    }
+
+    #[test]
+    fn accepts_monitor_enabled_in_configure_commands() {
+        let command: Command = serde_json::from_str(
+            r#"{"type":"configure","micOutputDeviceId":"cable","monitorDeviceId":null,"realMicDeviceId":null,"passthrough":false,"micVolume":1,"monitorVolume":1,"monitorEnabled":false,"overlap":"stop"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            command,
+            Command::Configure {
+                monitor_enabled: false,
+                ..
+            }
+        ));
     }
 }
 
