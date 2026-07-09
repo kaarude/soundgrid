@@ -6,6 +6,7 @@ import {
   Tray,
   nativeImage,
   dialog,
+  session,
   shell,
   systemPreferences,
 } from "electron";
@@ -34,6 +35,7 @@ import {
   validateSettingsPatch,
   validateSoundClipPatch,
 } from "./ipc-validation.js";
+import { ensureMacMicrophoneAccess } from "./mac-permissions.js";
 
 // The native sidecar owns decoding, WASAPI/CoreAudio streams, mixing and
 // metering. On Windows, the mic bus is rendered to VB-CABLE's playback
@@ -58,6 +60,7 @@ class SoundGrid {
 
   async start() {
     await app.whenReady();
+    denyRendererPermissions();
 
     const userDataDir = app.getPath("userData");
     const soundsDir = path.join(userDataDir, "sounds");
@@ -71,7 +74,7 @@ class SoundGrid {
     if (
       process.platform === "darwin" &&
       this.settings.get().passthrough &&
-      !(await requestMacMicrophoneAccess())
+      !(await ensureMacMicrophoneAccess(systemPreferences, { prompt: false }))
     ) {
       await this.settings.set({ passthrough: false });
       this.startupWarning =
@@ -328,7 +331,7 @@ class SoundGrid {
         process.platform === "darwin" &&
         patch.passthrough === true &&
         !previous.passthrough &&
-        !(await requestMacMicrophoneAccess())
+        !(await ensureMacMicrophoneAccess(systemPreferences, { prompt: true }))
       ) {
         throw new Error(
           "Microphone access is required for passthrough. Allow SoundGrid in System Settings → Privacy & Security → Microphone, then restart the app.",
@@ -537,9 +540,12 @@ function devServerUrl(): string | undefined {
   return undefined;
 }
 
-async function requestMacMicrophoneAccess(): Promise<boolean> {
-  const status = systemPreferences.getMediaAccessStatus("microphone");
-  if (status === "granted") return true;
-  if (status === "denied" || status === "restricted") return false;
-  return systemPreferences.askForMediaAccess("microphone");
+function denyRendererPermissions(): void {
+  // Audio capture is owned by the native sidecar after the main process has
+  // completed the explicit macOS TCC flow. The local renderer needs no web
+  // permissions and must never trigger an independent Chromium media prompt.
+  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionRequestHandler(
+    (_webContents, _permission, callback) => callback(false),
+  );
 }

@@ -109,12 +109,17 @@ body {
   min-width: 0;
   min-height: 0;
   display: grid;
+  grid-template-areas:
+    "topbar"
+    "status"
+    "body";
   grid-template-rows: auto auto minmax(0, 1fr);
   background: var(--bg);
   overflow: hidden;
 }
 
 .system-alert {
+  grid-area: status;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -182,6 +187,7 @@ body {
 
 /* ---------- Top bar ---------- */
 .topbar {
+  grid-area: topbar;
   display: grid;
   grid-template-columns: 188px minmax(520px, 1fr) auto;
   align-items: center;
@@ -406,9 +412,10 @@ body {
 
 /* ---------- Body: sidebar · grid · console ---------- */
 .body {
+  grid-area: body;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  height: 100%;
+  align-self: stretch;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -1915,6 +1922,10 @@ body {
   transition:
     background var(--dur-fast) var(--ease-out-quint),
     border-color var(--dur-fast) var(--ease-out-quint);
+}
+.switch:disabled {
+  cursor: progress;
+  opacity: 0.72;
 }
 .switch-knob {
   position: absolute;

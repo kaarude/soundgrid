@@ -61,6 +61,24 @@ try {
       `Renderer smoke test failed: ${JSON.stringify(values)}\n${output.join("")}`,
     );
   }
+  const standard = await evaluatePage(
+    port,
+    [
+      "document.querySelector('.app')?.getBoundingClientRect().height === innerHeight",
+      "document.querySelector('.body')?.getBoundingClientRect().bottom === innerHeight",
+      "document.querySelector('.sidebar')?.getBoundingClientRect().bottom === document.querySelector('.body')?.getBoundingClientRect().bottom",
+      "document.querySelector('.library')?.getBoundingClientRect().bottom === document.querySelector('.body')?.getBoundingClientRect().bottom",
+    ],
+    { width: 1100, height: 760 },
+  );
+  if (standard.some((value) => value !== true)) {
+    const metrics = await evaluatePage(port, [
+      "({ innerHeight, app: document.querySelector('.app')?.getBoundingClientRect().toJSON(), body: document.querySelector('.body')?.getBoundingClientRect().toJSON(), sidebar: document.querySelector('.sidebar')?.getBoundingClientRect().toJSON(), library: document.querySelector('.library')?.getBoundingClientRect().toJSON() })",
+    ]);
+    throw new Error(
+      `Standard-layout smoke test failed: ${JSON.stringify(standard)} ${JSON.stringify(metrics)}\n${output.join("")}`,
+    );
+  }
   const compact = await evaluatePage(
     port,
     [
@@ -68,6 +86,8 @@ try {
       "document.querySelector('.topbar')?.scrollWidth <= document.querySelector('.topbar')?.clientWidth",
       "document.querySelector('.topbar-buses')?.scrollWidth <= document.querySelector('.topbar-buses')?.clientWidth",
       "document.querySelector('.body')?.scrollWidth <= document.querySelector('.body')?.clientWidth",
+      "document.querySelector('.body')?.getBoundingClientRect().bottom === innerHeight",
+      "document.querySelector('.library')?.clientHeight > 0",
     ],
     { width: 640, height: 480 },
   );
@@ -77,7 +97,7 @@ try {
     );
   }
   console.log(
-    "Electron smoke test passed: preload bridge, update UI, and compact layout loaded.",
+    "Electron smoke test passed: preload bridge, update UI, and responsive layouts loaded.",
   );
 } finally {
   if (process.platform === "win32") {
