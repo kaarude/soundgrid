@@ -1859,6 +1859,9 @@ body {
   color: var(--danger);
   border: 1px solid var(--danger-border);
 }
+.routing-refresh {
+  margin: calc(-1 * var(--space-xs)) 0 var(--space-md);
+}
 .field.is-valid .field-hint {
   color: var(--accent-2);
 }

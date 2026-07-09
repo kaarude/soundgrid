@@ -2,10 +2,10 @@
 
 ## Other applications cannot hear clips
 
-1. Open Settings and confirm **Mic output device** is `CABLE Input`.
-2. In Discord, OBS, or the game, select `CABLE Output` as the microphone.
+1. Open Settings and confirm **Mic output device** is `CABLE Input` on Windows or `BlackHole 2ch` on macOS.
+2. In Discord, OBS, or the game, select `CABLE Output` on Windows or `BlackHole 2ch` on macOS as the microphone.
 3. Confirm the mic bus is not muted and its meter moves when a clip fires.
-4. Restart Windows if VB-CABLE was just installed.
+4. Restart Windows after VB-CABLE installation. On macOS, quit and reopen SoundGrid after installing BlackHole, then use **Refresh audio devices** in Settings.
 
 ## I cannot hear previews
 
@@ -26,8 +26,16 @@ when no route has been selected.
 ## A shortcut will not save
 
 The shortcut is invalid, duplicates another SoundGrid binding, or is already
-reserved by Windows or another application. Choose a modified shortcut or a
-function key.
+reserved by the operating system or another application. Choose a modified
+shortcut or a function key. Standard macOS shortcuts do not require
+Accessibility permission; Electron only requires it for media-key shortcuts,
+which SoundGrid does not currently expose.
+
+## Microphone passthrough is unavailable on macOS
+
+Open **System Settings → Privacy & Security → Microphone**, allow SoundGrid,
+and restart the app. SoundGrid requests this permission only when physical-mic
+passthrough is enabled; playing clips does not capture the microphone.
 
 ## Settings or the library were corrupted
 

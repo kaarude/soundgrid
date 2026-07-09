@@ -83,10 +83,13 @@ export function routeIsAvailable(
 
 function preferredMicOutput(devices: AudioDevices): string | null {
   return (
-    devices.micOutputs.find((device) => /cable input/i.test(device.label))
-      ?.id ??
-    devices.micOutputs[0]?.id ??
-    null
+    devices.micOutputs.find(
+      (device) =>
+        device.kind === "virtual" ||
+        /cable input|vb-audio.*cable|blackhole|soundflower|loopback audio/i.test(
+          device.label,
+        ),
+    )?.id ?? null
   );
 }
 
@@ -96,7 +99,11 @@ function preferredMonitor(
 ): string | null {
   const eligible = selectableMonitorDevices(devices, settings);
   return (
-    eligible.find((device) => !/cable/i.test(device.label))?.id ??
+    eligible.find(
+      (device) =>
+        device.kind !== "virtual" &&
+        !/cable|blackhole|soundflower|loopback audio/i.test(device.label),
+    )?.id ??
     eligible[0]?.id ??
     null
   );

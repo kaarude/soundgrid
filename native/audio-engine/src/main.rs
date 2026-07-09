@@ -158,11 +158,13 @@ impl Engine {
                 self.host
                     .output_devices()
                     .context("cannot enumerate output devices")?,
+                DeviceDirection::Output,
             )?,
             enumerate(
                 self.host
                     .input_devices()
                     .context("cannot enumerate input devices")?,
+                DeviceDirection::Input,
             )?,
         ))
     }
@@ -371,15 +373,7 @@ fn handle(engine: &mut Engine, command: Command) -> Result<bool> {
             trim_start,
             trim_end,
             looped,
-        } => engine.play(
-            bus,
-            clip_id,
-            path,
-            volume,
-            trim_start,
-            trim_end,
-            looped,
-        )?,
+        } => engine.play(bus, clip_id, path, volume, trim_start, trim_end, looped)?,
         Command::Pause { bus } => engine.with_bus(bus, |state| state.paused = true),
         Command::Resume { bus } => engine.with_bus(bus, |state| state.paused = false),
         Command::Stop { bus } => engine.with_bus(bus, |state| state.voices.clear()),
@@ -396,8 +390,19 @@ fn handle(engine: &mut Engine, command: Command) -> Result<bool> {
     Ok(false)
 }
 
-fn enumerate(devices: impl Iterator<Item = Device>) -> Result<Vec<DeviceInfo>> {
-    devices.map(|device| describe_device(&device)).collect()
+#[derive(Clone, Copy)]
+enum DeviceDirection {
+    Input,
+    Output,
+}
+
+fn enumerate(
+    devices: impl Iterator<Item = Device>,
+    direction: DeviceDirection,
+) -> Result<Vec<DeviceInfo>> {
+    devices
+        .map(|device| describe_device(&device, direction))
+        .collect()
 }
 
 fn select_output(host: &cpal::Host, id: Option<&str>) -> Result<Option<Device>> {
@@ -427,29 +432,72 @@ fn select(host: &cpal::Host, id: Option<&str>) -> Result<Option<Device>> {
     Ok(None)
 }
 
-fn describe_device(device: &Device) -> Result<DeviceInfo> {
+fn describe_device(device: &Device, direction: DeviceDirection) -> Result<DeviceInfo> {
     let description = device
         .description()
         .context("cannot read audio device description")?;
     let id = device.id().context("cannot read stable audio device id")?;
+    let label = description
+        .extended()
+        .first()
+        .map(String::as_str)
+        .unwrap_or(description.name())
+        .to_string();
     let kind = match description.device_type() {
         DeviceType::Headphones => DeviceKind::Headphones,
         DeviceType::Headset => DeviceKind::Headset,
         DeviceType::Speaker => DeviceKind::Speaker,
         DeviceType::Microphone => DeviceKind::Microphone,
         DeviceType::Virtual => DeviceKind::Virtual,
-        _ => DeviceKind::Unknown,
+        _ => infer_device_kind(&label, direction),
     };
     Ok(DeviceInfo {
         id: id.to_string(),
-        label: description
-            .extended()
-            .first()
-            .map(String::as_str)
-            .unwrap_or(description.name())
-            .to_string(),
+        label,
         kind,
     })
+}
+
+fn infer_device_kind(label: &str, direction: DeviceDirection) -> DeviceKind {
+    let normalized = label.to_lowercase();
+    if [
+        "blackhole",
+        "soundflower",
+        "loopback audio",
+        "vb-audio",
+        "cable input",
+    ]
+    .iter()
+    .any(|needle| normalized.contains(needle))
+    {
+        return DeviceKind::Virtual;
+    }
+    if [
+        "headphone",
+        "airpods",
+        "earbuds",
+        "kopfhörer",
+        "casque",
+        "cuffie",
+    ]
+    .iter()
+    .any(|needle| normalized.contains(needle))
+    {
+        return DeviceKind::Headphones;
+    }
+    match direction {
+        DeviceDirection::Input
+            if normalized.contains("mic") || normalized.contains("microphone") =>
+        {
+            DeviceKind::Microphone
+        }
+        DeviceDirection::Output
+            if normalized.contains("speaker") || normalized.contains("output") =>
+        {
+            DeviceKind::Speaker
+        }
+        _ => DeviceKind::Unknown,
+    }
 }
 
 fn build_output(
@@ -588,8 +636,7 @@ fn sample_voice(voice: &Voice, output_channel: usize) -> f32 {
     if voice.start_frame >= voice.end_frame {
         return 0.0;
     }
-    let frame = (voice.position.floor() as usize)
-        .clamp(voice.start_frame, voice.end_frame - 1);
+    let frame = (voice.position.floor() as usize).clamp(voice.start_frame, voice.end_frame - 1);
     let next = (frame + 1).min(voice.end_frame - 1);
     let fraction = (voice.position - frame as f64) as f32;
     let channel = if voice.audio.channels == 1 {
@@ -603,8 +650,7 @@ fn sample_voice(voice: &Voice, output_channel: usize) -> f32 {
     let fade_frames = (voice.audio.sample_rate as usize / 200).max(1); // 5 ms
     let from_start = frame.saturating_sub(voice.start_frame);
     let to_end = voice.end_frame.saturating_sub(frame + 1);
-    let envelope =
-        (from_start.min(to_end).min(fade_frames) as f32 / fade_frames as f32).min(1.0);
+    let envelope = (from_start.min(to_end).min(fade_frames) as f32 / fade_frames as f32).min(1.0);
     interpolated * envelope
 }
 
@@ -704,9 +750,10 @@ fn emit_error(error: impl std::fmt::Display) {
 #[cfg(test)]
 mod tests {
     use super::{
-        finish_voices, playback_bounds, sample_voice, soft_limit, BusState, CaptureBuffer,
-        DecodedAudio, Voice,
+        finish_voices, infer_device_kind, playback_bounds, sample_voice, soft_limit, BusState,
+        CaptureBuffer, DecodedAudio, DeviceDirection, Voice,
     };
+    use crate::protocol::DeviceKind;
     use std::sync::Arc;
 
     fn voice(instance_id: u64, clip_id: &str) -> Voice {
@@ -727,9 +774,31 @@ mod tests {
     }
 
     #[test]
+    fn classifies_coreaudio_devices_when_the_backend_has_no_device_type() {
+        assert!(matches!(
+            infer_device_kind("BlackHole 2ch", DeviceDirection::Output),
+            DeviceKind::Virtual
+        ));
+        assert!(matches!(
+            infer_device_kind("MacBook Pro Speakers", DeviceDirection::Output),
+            DeviceKind::Speaker
+        ));
+        assert!(matches!(
+            infer_device_kind("MacBook Pro Microphone", DeviceDirection::Input),
+            DeviceKind::Microphone
+        ));
+        assert!(matches!(
+            infer_device_kind("Carl's AirPods", DeviceDirection::Output),
+            DeviceKind::Headphones
+        ));
+    }
+
+    #[test]
     fn repeated_overlap_only_ends_after_the_last_instance() {
-        let mut state = BusState::default();
-        state.voices = vec![voice(1, "clip"), voice(2, "clip")];
+        let mut state = BusState {
+            voices: vec![voice(1, "clip"), voice(2, "clip")],
+            ..BusState::default()
+        };
         assert!(finish_voices(&mut state, &[(1, "clip".into())]).is_empty());
         assert_eq!(state.voices.len(), 1);
         assert_eq!(finish_voices(&mut state, &[(2, "clip".into())]), ["clip"]);
@@ -737,9 +806,11 @@ mod tests {
 
     #[test]
     fn capture_buffer_resamples_between_device_rates() {
-        let mut capture = CaptureBuffer::default();
-        capture.input_rate = 44_100;
-        capture.output_rate = 48_000;
+        let mut capture = CaptureBuffer {
+            input_rate: 44_100,
+            output_rate: 48_000,
+            ..CaptureBuffer::default()
+        };
         for _ in 0..4_410 {
             capture.push(0.5);
         }

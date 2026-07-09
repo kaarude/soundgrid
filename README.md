@@ -2,13 +2,13 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-WIP%20/%20pre--alpha-orange)](#roadmap)
-[![Made with Electron](https://img.shields.io/badge/Electron-33-47848f.svg)](https://www.electronjs.org/)
+[![Made with Electron](https://img.shields.io/badge/Electron-43-47848f.svg)](https://www.electronjs.org/)
 
 An open-source, cross-platform **soundboard** that routes audio clips directly into a virtual microphone stream — so games, Discord, OBS, and other voice applications receive the audio as if it originated from a physical microphone. No additional hardware is required.
 
-SoundGrid is Windows-first and distributed as a single executable (NSIS installer and portable build). It is released under the MIT license.
+SoundGrid supports Windows and macOS with the same Cue Rack UI and feature set. It is released under the MIT license.
 
-**[Download SoundGrid for Windows](https://github.com/kaarude/soundgrid/releases/latest)**
+**[Download SoundGrid for Windows or macOS](https://github.com/kaarude/soundgrid/releases/latest)**
 
 ---
 
@@ -16,7 +16,7 @@ SoundGrid is Windows-first and distributed as a single executable (NSIS installe
 
 Existing tools in this category are typically commercial, require payment, and depend on a closed (often paid) kernel driver. SoundGrid is free, auditable, and relies on a free virtual audio cable instead.
 
-Windows and macOS do not provide a native "play audio into the microphone" API, so soundboard-class applications inject audio through a **virtual audio device**. SoundGrid routes its _mic bus_ to the device selected as the "Mic output device." Pointing this at a virtual cable such as **[VB-CABLE](https://vb-audio.com/Cable/)**, then selecting that cable as the microphone in Discord, OBS, or a game, transmits clips to other participants.
+Windows and macOS do not provide a native "play audio into the microphone" API, so soundboard-class applications inject audio through a **virtual audio device**. SoundGrid routes its _mic bus_ to the device selected as the "Mic output device." Use **[VB-CABLE](https://vb-audio.com/Cable/)** on Windows or **[BlackHole 2ch](https://existential.audio/blackhole/)** on macOS, then select the corresponding virtual input as the microphone in Discord, OBS, or a game.
 
 The core architectural principle is the **two-bus audio model** — a clear separation between "what others hear" and "what you hear" that is enforced throughout the interface to prevent misconfiguration. The complete design is documented in [`PLAN.html`](PLAN.html).
 
@@ -43,7 +43,7 @@ Sound clip
 - **Mute / monitor-only / mic-only routing states** — distinguishable at a glance by shape and position, not color alone.
 - **Local library** — import custom clips; SoundGrid stores them in the application data directory.
 - **Audio-safe playback** — peak-normalized clips, click-safe fades, per-clip start/end trim, and soft limiting when cues overlap.
-- **Single executable** — NSIS installer and portable build via `electron-builder`.
+- **Native desktop packages** — NSIS on Windows and a universal Intel/Apple Silicon DMG on macOS.
 
 ### Supported audio formats
 
@@ -52,11 +52,11 @@ Import: **MP3, WAV, OGG/OGA, FLAC, M4A/AAC, OPUS, WebM-audio**.
 ## Tech stack
 
 - **Electron 33** — desktop shell
-- **Rust + CPAL/WASAPI** — native device I/O, mixing, passthrough, and metering
+- **Rust + CPAL** — native WASAPI/CoreAudio device I/O, mixing, passthrough, and metering
 - **Symphonia** — native clip decoding
 - **TypeScript** — end-to-end, strict mode
 - **Vite 6** — renderer dev server and build
-- **electron-builder** — Windows NSIS and portable packaging
+- **electron-builder** — Windows NSIS plus universal macOS DMG/ZIP packaging
 - **Plain DOM renderer** — intentionally framework-free for a small, fast, auditable codebase
 
 ## Project layout
@@ -95,17 +95,17 @@ This starts Vite on `:5173` and launches Electron against it. On first run, foll
 
 ### Scripts
 
-| Command                  | Description                                     |
-| ------------------------ | ----------------------------------------------- |
-| `npm run dev`            | Vite + Electron, hot-reloading renderer         |
-| `npm run build`          | Build renderer + main into `dist/`              |
-| `npm run pack`           | Build + unpacked app (sanity check)             |
-| `npm run dist`           | Build + Windows installer and portable exe      |
-| `npm run dist:installer` | Build only `SoundGrid-Setup-*.exe`              |
-| `npm run dist:portable`  | Build only the no-install portable exe          |
-| `npm run dist:mac`       | Build + macOS package (dev-only; no mic inject) |
-| `npm run check`          | Type-check main + renderer                      |
-| `npm run format`         | Prettier write across the repo                  |
+| Command                  | Description                                |
+| ------------------------ | ------------------------------------------ |
+| `npm run dev`            | Vite + Electron, hot-reloading renderer    |
+| `npm run build`          | Build renderer + main into `dist/`         |
+| `npm run pack`           | Build + unpacked app (sanity check)        |
+| `npm run dist`           | Build + Windows installer and portable exe |
+| `npm run dist:installer` | Build only `SoundGrid-Setup-*.exe`         |
+| `npm run dist:portable`  | Build only the no-install portable exe     |
+| `npm run dist:mac`       | Build universal macOS DMG + updater ZIP    |
+| `npm run check`          | Type-check main + renderer                 |
+| `npm run format`         | Prettier write across the repo             |
 
 ## Building a Windows release
 
@@ -120,7 +120,19 @@ The distribution build downloads the original VB-CABLE 4.5 package from VB-Audio
 
 The GitHub Actions release workflow also builds the installer on a clean Windows machine. Run **Build Windows installer** from the repository's Actions tab to obtain a downloadable artifact, or push a tag such as `v0.1.0` to attach the executable directly to a GitHub Release.
 
-> **macOS note:** the native engine supports standard CoreAudio devices for development, but the bundled virtual microphone installation is Windows-only.
+## Building a macOS release
+
+macOS packages must be built on macOS with Rust's Intel and Apple Silicon targets installed:
+
+```bash
+rustup target add x86_64-apple-darwin aarch64-apple-darwin
+pnpm install --frozen-lockfile
+pnpm dist:mac
+```
+
+The result is a universal DMG plus the ZIP metadata required by automatic updates. SoundGrid detects BlackHole, Soundflower, and Loopback-compatible outputs, and guides new users to the open-source BlackHole 2ch installer. BlackHole is installed separately and is not covered by SoundGrid's MIT license.
+
+For public distribution, configure `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, and `APPLE_TEAM_ID` as GitHub Actions secrets. The release workflow then signs with Developer ID, applies the hardened-runtime audio-input entitlement, notarizes with Apple, and staples the result. Without these credentials, local and CI builds are unsigned development artifacts.
 
 ## Roadmap
 
@@ -132,8 +144,11 @@ The GitHub Actions release workflow also builds the installer on a clean Windows
 - [x] GitHub Actions release pipeline (NSIS installer)
 - [x] Guided first-run routing setup
 - [x] Automatic update download and install
+- [x] Native CoreAudio mic/monitor routing on macOS
+- [x] Guided BlackHole setup and safe loopback auto-selection
+- [x] Universal Intel/Apple Silicon DMG and updater ZIP pipeline
 
-Hardware validation, code signing, and explicit public-redistribution confirmation from VB-Audio remain release gates. See [`ROADMAP.md`](ROADMAP.md).
+BlackHole loopback hardware validation, Apple Developer ID credentials, and explicit public-redistribution confirmation from VB-Audio remain release gates. See [`ROADMAP.md`](ROADMAP.md).
 
 ## Development methodology
 

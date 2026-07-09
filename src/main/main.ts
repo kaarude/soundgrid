@@ -7,6 +7,7 @@ import {
   nativeImage,
   dialog,
   shell,
+  systemPreferences,
 } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -66,9 +67,9 @@ class SoundGrid {
       this.win?.webContents.send(IPC.LIBRARY_CHANGED, clips),
     );
     await this.settings.init(path.join(userDataDir, "settings.json"));
-    app.setLoginItemSettings({
-      openAtLogin: this.settings.get().runOnStartup,
-    });
+    if (this.settings.get().runOnStartup) {
+      app.setLoginItemSettings({ openAtLogin: true });
+    }
 
     this.audio.onEvent((event) => this.onAudioEvent(event));
     await this.audio.start(this.settings.get());
@@ -205,6 +206,7 @@ class SoundGrid {
     const icon = loadedIcon.isEmpty()
       ? nativeImage.createEmpty()
       : loadedIcon.resize({ width: 16, height: 16 });
+    if (process.platform === "darwin") icon.setTemplateImage(true);
     this.tray = new Tray(icon);
     this.tray.setToolTip("SoundGrid");
     this.tray.on("click", () => this.win?.show());
@@ -303,9 +305,24 @@ class SoundGrid {
     ipcMain.handle(IPC.SETTINGS_SET, async (_e, rawPatch: unknown) => {
       const patch = validateSettingsPatch(rawPatch);
       const previous = this.settings.get();
+      if (
+        process.platform === "darwin" &&
+        patch.passthrough === true &&
+        !previous.passthrough &&
+        !(await requestMacMicrophoneAccess())
+      ) {
+        throw new Error(
+          "Microphone access is required for passthrough. Allow SoundGrid in System Settings → Privacy & Security → Microphone, then restart the app.",
+        );
+      }
       const next = await this.settings.set(patch);
       this.audio.applySettings(next);
-      app.setLoginItemSettings({ openAtLogin: next.runOnStartup });
+      if (
+        typeof patch.runOnStartup === "boolean" &&
+        patch.runOnStartup !== previous.runOnStartup
+      ) {
+        app.setLoginItemSettings({ openAtLogin: next.runOnStartup });
+      }
       const hotkeys = this.registerPersistedHotkeys();
       const changedHotkey = Object.prototype.hasOwnProperty.call(
         patch,
@@ -499,4 +516,11 @@ function devServerUrl(): string | undefined {
     return undefined;
   }
   return undefined;
+}
+
+async function requestMacMicrophoneAccess(): Promise<boolean> {
+  const status = systemPreferences.getMediaAccessStatus("microphone");
+  if (status === "granted") return true;
+  if (status === "denied" || status === "restricted") return false;
+  return systemPreferences.askForMediaAccess("microphone");
 }

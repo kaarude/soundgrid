@@ -349,7 +349,7 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
       if (failed) {
         const message =
           failed.reason === "unavailable"
-            ? "Saved, but Windows or another app already owns this shortcut."
+            ? "Saved, but the operating system or another app already owns this shortcut."
             : "Saved, but Electron does not support this shortcut.";
         store.update({
           clips: store.state.clips.map((item) =>
