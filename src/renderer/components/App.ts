@@ -153,8 +153,8 @@ async function boot(): Promise<void> {
 
   applyTheme(settings.theme);
 
-  // device enumeration: the main process can't list audio devices, so the
-  // renderer queries the Web Audio / MediaDevices API and surfaces them.
+  // Native device enumeration avoids Chromium media permissions. On macOS,
+  // startup lists outputs only until the user explicitly grants mic access.
   const devices = await refreshDevices();
   if (devices) await syncRoutingWithDevices(devices, settings);
   try {

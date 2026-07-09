@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 )]
 pub enum Command {
     ListDevices {
+        #[serde(default)]
+        request_id: u64,
         #[serde(default = "default_true")]
         include_inputs: bool,
     },
@@ -100,6 +102,7 @@ pub enum DeviceKind {
 pub enum Event {
     Ready,
     Devices {
+        request_id: u64,
         outputs: Vec<DeviceInfo>,
         inputs: Vec<DeviceInfo>,
     },
@@ -166,10 +169,12 @@ mod tests {
     #[test]
     fn device_listing_can_skip_permission_gated_inputs() {
         let outputs_only: Command =
-            serde_json::from_str(r#"{"type":"listDevices","includeInputs":false}"#).unwrap();
+            serde_json::from_str(r#"{"type":"listDevices","requestId":7,"includeInputs":false}"#)
+                .unwrap();
         assert!(matches!(
             outputs_only,
             Command::ListDevices {
+                request_id: 7,
                 include_inputs: false
             }
         ));
@@ -179,6 +184,7 @@ mod tests {
         assert!(matches!(
             backwards_compatible,
             Command::ListDevices {
+                request_id: 0,
                 include_inputs: true
             }
         ));

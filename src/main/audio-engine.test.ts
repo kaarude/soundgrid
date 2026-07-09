@@ -54,7 +54,7 @@ process.stdin.on("data", (chunk) => {
     try { cmd = JSON.parse(line); } catch { continue; }
     log(cmd);
     if (cmd.type === "listDevices" && process.env.FAKE_NO_DEVICES !== "1") {
-      send({ type: "devices", outputs: [{ id: "0:Speakers", label: "Speakers" }, { id: "1:Cable", label: "CABLE Input" }], inputs: cmd.includeInputs === false ? [] : [{ id: "0:Mic", label: "Microphone" }] });
+      send({ type: "devices", requestId: cmd.requestId, outputs: [{ id: "0:Speakers", label: "Speakers" }, { id: "1:Cable", label: "CABLE Input" }], inputs: cmd.includeInputs === false ? [] : [{ id: "0:Mic", label: "Microphone" }] });
     } else if (cmd.type === "play" && process.env.FAKE_CLIP_ENDED === "1") {
       send({ type: "clipEnded", bus: cmd.bus, clipId: cmd.clipId });
     } else if (cmd.type === "shutdown" && process.env.FAKE_IGNORE_SHUTDOWN !== "1") {
@@ -234,8 +234,21 @@ describe("AudioEngine bridge", () => {
     >[];
     expect(commands.find((command) => command.type === "listDevices")).toEqual({
       type: "listDevices",
+      requestId: 1,
       includeInputs: false,
     });
+  });
+
+  it("correlates concurrent output-only and microphone device requests", async () => {
+    const { engine } = makeEngine();
+    await engine.start(baseSettings);
+
+    const [outputsOnly, withInputs] = await Promise.all([
+      engine.listDevices(false),
+      engine.listDevices(true),
+    ]);
+    expect(outputsOnly.realMics).toEqual([]);
+    expect(withInputs.realMics).toEqual([{ id: "0:Mic", label: "Microphone" }]);
   });
 
   it("routes a broadcast clip to both buses and a monitor-only clip to one", async () => {

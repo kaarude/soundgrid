@@ -359,9 +359,16 @@ fn main() -> Result<()> {
 
 fn handle(engine: &mut Engine, command: Command) -> Result<bool> {
     match command {
-        Command::ListDevices { include_inputs } => {
+        Command::ListDevices {
+            request_id,
+            include_inputs,
+        } => {
             let (outputs, inputs) = engine.devices(include_inputs)?;
-            emit(&Event::Devices { outputs, inputs });
+            emit(&Event::Devices {
+                request_id,
+                outputs,
+                inputs,
+            });
         }
         Command::Configure {
             mic_output_device_id,
