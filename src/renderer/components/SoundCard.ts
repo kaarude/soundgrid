@@ -232,6 +232,20 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
   volumeTrack.append(volumeInput);
   volume.append(volumeHead, volumeTrack);
 
+  const trim = document.createElement("fieldset");
+  trim.className = "clip-trim";
+  const trimLegend = document.createElement("legend");
+  trimLegend.textContent = "Trim";
+  const trimFields = document.createElement("div");
+  trimFields.className = "clip-trim-fields";
+  const trimStart = numberField("Start (seconds)", clip.trimStart);
+  const trimEnd = numberField("End (seconds)", clip.trimEnd);
+  trimFields.append(trimStart.label, trimEnd.label);
+  const trimHelp = document.createElement("span");
+  trimHelp.className = "clip-field-help";
+  trimHelp.textContent = "Skip time from the beginning or end of playback.";
+  trim.append(trimLegend, trimFields, trimHelp);
+
   const loop = document.createElement("label");
   loop.className = "clip-check";
   const loopInput = document.createElement("input");
@@ -321,6 +335,8 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
       name: name.input.value,
       hotkey: normalizedHotkey || null,
       volume: Number(volumeInput.value) / 100,
+      trimStart: Number(trimStart.input.value),
+      trimEnd: Number(trimEnd.input.value),
       loop: loopInput.checked,
       broadcast: broadcastRoute.input.checked,
     };
@@ -355,7 +371,16 @@ function ClipSettingsMenu(clip: SoundClip, card: HTMLElement): HTMLElement {
     }
   });
 
-  form.append(name.label, hotkey.label, volume, loop, route, error, footer);
+  form.append(
+    name.label,
+    hotkey.label,
+    volume,
+    trim,
+    loop,
+    route,
+    error,
+    footer,
+  );
   return form;
 }
 
@@ -406,6 +431,21 @@ function textField(labelText: string, value: string) {
   const input = document.createElement("input");
   input.type = "text";
   input.value = value;
+  label.append(span, input);
+  return { label, input };
+}
+
+function numberField(labelText: string, value: number) {
+  const label = document.createElement("label");
+  label.className = "clip-field";
+  const span = document.createElement("span");
+  span.textContent = labelText;
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "0";
+  input.max = "600";
+  input.step = "0.01";
+  input.value = String(value);
   label.append(span, input);
   return { label, input };
 }

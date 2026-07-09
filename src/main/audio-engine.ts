@@ -252,6 +252,8 @@ export class AudioEngine {
       clipId: clip.id,
       path: clip.filePath,
       volume: clamp01(clip.volume),
+      trimStart: Math.max(0, clip.trimStart),
+      trimEnd: Math.max(0, clip.trimEnd),
       looped: clip.loop,
     });
   }

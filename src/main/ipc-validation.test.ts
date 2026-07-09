@@ -38,9 +38,18 @@ describe("IPC validation", () => {
   });
 
   it("validates clip patch and hotkey binding shapes", () => {
-    expect(validateSoundClipPatch({ name: "Airhorn", volume: 0.8 })).toEqual({
+    expect(
+      validateSoundClipPatch({
+        name: "Airhorn",
+        volume: 0.8,
+        trimStart: 0.25,
+        trimEnd: 1.5,
+      }),
+    ).toEqual({
       name: "Airhorn",
       volume: 0.8,
+      trimStart: 0.25,
+      trimEnd: 1.5,
     });
     expect(() => validateSoundClipPatch({ filePath: "/tmp/evil.wav" })).toThrow(
       "Unsupported clip field",

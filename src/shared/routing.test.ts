@@ -12,6 +12,8 @@ const clip = (broadcast: boolean): SoundClip => ({
   filePath: "/clip.wav",
   favorite: false,
   volume: 1,
+  trimStart: 0,
+  trimEnd: 0,
   loop: false,
   broadcast,
 });

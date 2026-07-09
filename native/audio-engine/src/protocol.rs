@@ -23,6 +23,10 @@ pub enum Command {
         clip_id: String,
         path: String,
         volume: f32,
+        #[serde(default)]
+        trim_start: f32,
+        #[serde(default)]
+        trim_end: f32,
         looped: bool,
     },
     Pause {
@@ -112,10 +116,18 @@ mod tests {
     #[test]
     fn accepts_renderer_camel_case_command_fields() {
         let command: Command = serde_json::from_str(
-            r#"{"type":"play","bus":"mic","clipId":"clip","path":"clip.wav","volume":1,"looped":false}"#,
+            r#"{"type":"play","bus":"mic","clipId":"clip","path":"clip.wav","volume":1,"trimStart":0.25,"trimEnd":0.5,"looped":false}"#,
         )
         .unwrap();
-        assert!(matches!(command, Command::Play { clip_id, .. } if clip_id == "clip"));
+        assert!(matches!(
+            command,
+            Command::Play {
+                clip_id,
+                trim_start: 0.25,
+                trim_end: 0.5,
+                ..
+            } if clip_id == "clip"
+        ));
     }
 
     #[test]

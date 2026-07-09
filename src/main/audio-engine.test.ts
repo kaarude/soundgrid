@@ -180,6 +180,8 @@ function clip(overrides: Partial<SoundClip> & { id: string }): SoundClip {
     filePath: overrides.filePath ?? "/clip.wav",
     favorite: false,
     volume: overrides.volume ?? 1,
+    trimStart: overrides.trimStart ?? 0,
+    trimEnd: overrides.trimEnd ?? 0,
     loop: overrides.loop ?? false,
     broadcast: overrides.broadcast ?? true,
   };
@@ -227,6 +229,8 @@ describe("AudioEngine bridge", () => {
         name: "A",
         filePath: "/a.wav",
         volume: 0.6,
+        trimStart: 0.25,
+        trimEnd: 0.5,
         loop: true,
       }),
     );
@@ -250,6 +254,8 @@ describe("AudioEngine bridge", () => {
         clipId: "c1",
         path: "/a.wav",
         volume: 0.6,
+        trimStart: 0.25,
+        trimEnd: 0.5,
         looped: true,
       },
       {
@@ -258,6 +264,8 @@ describe("AudioEngine bridge", () => {
         clipId: "c1",
         path: "/a.wav",
         volume: 0.6,
+        trimStart: 0.25,
+        trimEnd: 0.5,
         looped: true,
       },
       {
@@ -266,6 +274,8 @@ describe("AudioEngine bridge", () => {
         clipId: "c2",
         path: "/b.wav",
         volume: 0.4,
+        trimStart: 0,
+        trimEnd: 0,
         looped: false,
       },
     ]);

@@ -29,6 +29,8 @@ struct Voice {
     clip_id: String,
     audio: Arc<DecodedAudio>,
     position: f64,
+    start_frame: usize,
+    end_frame: usize,
     volume: f32,
     looped: bool,
 }
@@ -242,8 +244,19 @@ impl Engine {
         Ok(())
     }
 
-    fn play(&self, bus: Bus, id: String, path: String, volume: f32, looped: bool) -> Result<()> {
+    #[allow(clippy::too_many_arguments)]
+    fn play(
+        &self,
+        bus: Bus,
+        id: String,
+        path: String,
+        volume: f32,
+        trim_start: f32,
+        trim_end: f32,
+        looped: bool,
+    ) -> Result<()> {
         let audio = Arc::new(decoder::decode(&path)?);
+        let (start_frame, end_frame) = playback_bounds(&audio, trim_start, trim_end)?;
         let state = match bus {
             Bus::Mic => &self.mic,
             Bus::Monitor => &self.monitor,
@@ -258,7 +271,9 @@ impl Engine {
             instance_id: NEXT_VOICE_INSTANCE.fetch_add(1, Ordering::Relaxed),
             clip_id: id,
             audio,
-            position: 0.0,
+            position: start_frame as f64,
+            start_frame,
+            end_frame,
             volume: clamp01(volume),
             looped,
         });
@@ -353,8 +368,18 @@ fn handle(engine: &mut Engine, command: Command) -> Result<bool> {
             clip_id,
             path,
             volume,
+            trim_start,
+            trim_end,
             looped,
-        } => engine.play(bus, clip_id, path, volume, looped)?,
+        } => engine.play(
+            bus,
+            clip_id,
+            path,
+            volume,
+            trim_start,
+            trim_end,
+            looped,
+        )?,
         Command::Pause { bus } => engine.with_bus(bus, |state| state.paused = true),
         Command::Resume { bus } => engine.with_bus(bus, |state| state.paused = false),
         Command::Stop { bus } => engine.with_bus(bus, |state| state.voices.clear()),
@@ -501,7 +526,7 @@ where
                                 value += sample_voice(voice, channel) * voice.volume;
                             }
                         }
-                        value = (value * gain).clamp(-1.0, 1.0);
+                        value = soft_limit(value * gain);
                         peak = peak.max(value.abs());
                         *sample = T::from_sample(value);
                     }
@@ -511,10 +536,11 @@ where
                                 break;
                             }
                             voice.position += voice.audio.sample_rate as f64 / sample_rate as f64;
-                            let frame_count = voice.audio.samples.len() / voice.audio.channels;
-                            if voice.position >= frame_count as f64 {
+                            if voice.position >= voice.end_frame as f64 {
                                 if voice.looped {
-                                    voice.position %= frame_count as f64;
+                                    let length = (voice.end_frame - voice.start_frame) as f64;
+                                    voice.position = voice.start_frame as f64
+                                        + (voice.position - voice.start_frame as f64) % length;
                                 } else if !finished
                                     .iter()
                                     .any(|(instance_id, _)| *instance_id == voice.instance_id)
@@ -559,12 +585,12 @@ fn finish_voices(state: &mut BusState, finished: &[(u64, String)]) -> Vec<String
 }
 
 fn sample_voice(voice: &Voice, output_channel: usize) -> f32 {
-    let frames = voice.audio.samples.len() / voice.audio.channels;
-    if frames == 0 {
+    if voice.start_frame >= voice.end_frame {
         return 0.0;
     }
-    let frame = (voice.position.floor() as usize).min(frames - 1);
-    let next = (frame + 1).min(frames - 1);
+    let frame = (voice.position.floor() as usize)
+        .clamp(voice.start_frame, voice.end_frame - 1);
+    let next = (frame + 1).min(voice.end_frame - 1);
     let fraction = (voice.position - frame as f64) as f32;
     let channel = if voice.audio.channels == 1 {
         0
@@ -575,14 +601,41 @@ fn sample_voice(voice: &Voice, output_channel: usize) -> f32 {
     let b = voice.audio.samples[next * voice.audio.channels + channel];
     let interpolated = a + (b - a) * fraction;
     let fade_frames = (voice.audio.sample_rate as usize / 200).max(1); // 5 ms
-    let from_start = voice.position as usize;
-    let to_end = frames.saturating_sub(from_start + 1);
-    let envelope = if voice.looped {
-        (from_start.min(fade_frames) as f32 / fade_frames as f32).min(1.0)
-    } else {
-        (from_start.min(to_end).min(fade_frames) as f32 / fade_frames as f32).min(1.0)
-    };
+    let from_start = frame.saturating_sub(voice.start_frame);
+    let to_end = voice.end_frame.saturating_sub(frame + 1);
+    let envelope =
+        (from_start.min(to_end).min(fade_frames) as f32 / fade_frames as f32).min(1.0);
     interpolated * envelope
+}
+
+fn playback_bounds(
+    audio: &DecodedAudio,
+    trim_start_seconds: f32,
+    trim_end_seconds: f32,
+) -> Result<(usize, usize)> {
+    let frames = audio.samples.len() / audio.channels;
+    let seconds_to_frames = |seconds: f32| {
+        if seconds.is_finite() {
+            (seconds.max(0.0) * audio.sample_rate as f32) as usize
+        } else {
+            0
+        }
+    };
+    let start = seconds_to_frames(trim_start_seconds).min(frames);
+    let end = frames.saturating_sub(seconds_to_frames(trim_end_seconds));
+    anyhow::ensure!(start < end, "clip trim removes all playable audio");
+    Ok((start, end))
+}
+
+fn soft_limit(value: f32) -> f32 {
+    const KNEE: f32 = 0.9;
+    let magnitude = value.abs();
+    if magnitude <= KNEE {
+        value
+    } else {
+        let compressed = KNEE + (1.0 - KNEE) * (1.0 - (-(magnitude - KNEE) / 0.1).exp());
+        value.signum() * compressed.min(1.0)
+    }
 }
 
 fn build_input(device: &Device, capture: Arc<Mutex<CaptureBuffer>>) -> Result<Stream> {
@@ -650,7 +703,10 @@ fn emit_error(error: impl std::fmt::Display) {
 
 #[cfg(test)]
 mod tests {
-    use super::{finish_voices, BusState, CaptureBuffer, DecodedAudio, Voice};
+    use super::{
+        finish_voices, playback_bounds, sample_voice, soft_limit, BusState, CaptureBuffer,
+        DecodedAudio, Voice,
+    };
     use std::sync::Arc;
 
     fn voice(instance_id: u64, clip_id: &str) -> Voice {
@@ -663,6 +719,8 @@ mod tests {
                 sample_rate: 48_000,
             }),
             position: 0.0,
+            start_frame: 0,
+            end_frame: 2,
             volume: 1.0,
             looped: false,
         }
@@ -688,5 +746,45 @@ mod tests {
         let output: Vec<_> = (0..2_400).map(|_| capture.next_resampled()).collect();
         assert!(output.iter().all(|sample| (*sample - 0.5).abs() < 0.001));
         assert!(capture.samples.len() > 1_900 && capture.samples.len() < 2_300);
+    }
+
+    #[test]
+    fn trim_bounds_are_applied_in_seconds() {
+        let audio = DecodedAudio {
+            samples: vec![0.5; 48_000],
+            channels: 1,
+            sample_rate: 48_000,
+        };
+        assert_eq!(
+            playback_bounds(&audio, 0.25, 0.5).unwrap(),
+            (12_000, 24_000)
+        );
+        assert!(playback_bounds(&audio, 0.75, 0.25).is_err());
+    }
+
+    #[test]
+    fn trim_edges_receive_click_safe_fades() {
+        let mut voice = voice(1, "trimmed");
+        voice.audio = Arc::new(DecodedAudio {
+            samples: vec![1.0; 1_000],
+            channels: 1,
+            sample_rate: 1_000,
+        });
+        voice.start_frame = 100;
+        voice.end_frame = 900;
+        voice.position = 100.0;
+        assert_eq!(sample_voice(&voice, 0), 0.0);
+        voice.position = 500.0;
+        assert_eq!(sample_voice(&voice, 0), 1.0);
+        voice.position = 899.0;
+        assert_eq!(sample_voice(&voice, 0), 0.0);
+    }
+
+    #[test]
+    fn soft_limiter_preserves_safe_audio_and_contains_overlaps() {
+        assert_eq!(soft_limit(0.5), 0.5);
+        assert_eq!(soft_limit(-0.9), -0.9);
+        assert!(soft_limit(2.0) > 0.9 && soft_limit(2.0) <= 1.0);
+        assert!(soft_limit(-2.0) < -0.9 && soft_limit(-2.0) >= -1.0);
     }
 }

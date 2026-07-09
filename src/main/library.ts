@@ -15,6 +15,7 @@ import {
   SoundClip,
   SoundClipPatch,
 } from "../shared/types.js";
+import { SerializedFileWriter } from "./serialized-file-writer.js";
 
 const SUPPORTED = new Set([
   ".aif",
@@ -42,6 +43,7 @@ export class LibraryStore {
   private clips: SoundClip[] = [];
   private watcher?: FSWatcher;
   private watchTimer?: NodeJS.Timeout;
+  private writer = new SerializedFileWriter();
 
   async init(dbPath: string, soundsDir: string) {
     this.dbPath = dbPath;
@@ -134,6 +136,8 @@ export class LibraryStore {
         filePath,
         favorite: false,
         volume: 1,
+        trimStart: 0,
+        trimEnd: 0,
         loop: false,
         broadcast: true,
       });
@@ -194,6 +198,8 @@ export class LibraryStore {
         filePath: dest,
         favorite: false,
         volume: 1,
+        trimStart: 0,
+        trimEnd: 0,
         loop: false,
         broadcast: true,
         contentHash,
@@ -212,8 +218,8 @@ export class LibraryStore {
     if (isInsideDir(clip.filePath, this.soundsDir)) {
       try {
         await fs.unlink(clip.filePath);
-      } catch {
-        /* file already gone */
+      } catch (error) {
+        if (!isNodeError(error, "ENOENT")) throw error;
       }
     }
     this.clips = this.clips.filter((c) => c.id !== id);
@@ -251,10 +257,19 @@ export class LibraryStore {
 
   private async persist() {
     const file: LibraryFile = { clips: this.clips };
-    const temporary = `${this.dbPath}.tmp`;
-    await fs.writeFile(temporary, JSON.stringify(file, null, 2), "utf8");
-    await fs.rename(temporary, this.dbPath);
+    await this.writer.write(this.dbPath, JSON.stringify(file, null, 2));
   }
+}
+
+function isNodeError(
+  error: unknown,
+  code: string,
+): error is NodeJS.ErrnoException {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === code
+  );
 }
 
 async function backupCorruptFile(filePath: string): Promise<void> {
@@ -291,6 +306,8 @@ function normalizeClip(clip: SoundClip): SoundClip {
     ...rest,
     favorite: Boolean(clip.favorite),
     volume: clamp01(Number.isFinite(clip.volume) ? clip.volume : 1),
+    trimStart: sanitizeTrim(clip.trimStart),
+    trimEnd: sanitizeTrim(clip.trimEnd),
     loop: Boolean(clip.loop),
     broadcast: clip.broadcast !== false,
   };
@@ -311,6 +328,12 @@ export function sanitizeClipPatch(patch: SoundClipPatch): SoundClipPatch {
     }
   }
   if (typeof patch.volume === "number") next.volume = clamp01(patch.volume);
+  if (typeof patch.trimStart === "number") {
+    next.trimStart = sanitizeTrim(patch.trimStart);
+  }
+  if (typeof patch.trimEnd === "number") {
+    next.trimEnd = sanitizeTrim(patch.trimEnd);
+  }
   if (typeof patch.loop === "boolean") next.loop = patch.loop;
   if (typeof patch.broadcast === "boolean") next.broadcast = patch.broadcast;
   return next;
@@ -318,6 +341,12 @@ export function sanitizeClipPatch(patch: SoundClipPatch): SoundClipPatch {
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
+}
+
+function sanitizeTrim(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(600, value))
+    : 0;
 }
 
 function isInsideDir(filePath: string, dir: string): boolean {
