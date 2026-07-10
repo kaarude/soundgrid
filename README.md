@@ -8,7 +8,7 @@ An open-source, cross-platform **soundboard** that routes audio clips directly i
 
 SoundGrid supports Windows and macOS with the same Cue Rack UI and feature set. It is released under the MIT license.
 
-**[Download SoundGrid for Windows or macOS](https://github.com/kaarude/soundgrid/releases/latest)**
+**[Download SoundGrid for Windows or macOS](https://github.com/kaarude/soundgrid/releases)**
 
 ---
 
