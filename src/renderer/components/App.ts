@@ -153,8 +153,8 @@ async function boot(): Promise<void> {
 
   applyTheme(settings.theme);
 
-  // device enumeration: the main process can't list audio devices, so the
-  // renderer queries the Web Audio / MediaDevices API and surfaces them.
+  // Native device enumeration avoids Chromium media permissions. On macOS,
+  // startup lists outputs only until the user explicitly grants mic access.
   const devices = await refreshDevices();
   if (devices) await syncRoutingWithDevices(devices, settings);
   try {
@@ -167,32 +167,8 @@ async function boot(): Promise<void> {
 async function refreshDevices(): Promise<AudioDevices | null> {
   try {
     const native = await window.soundgrid.listDevices();
-    if (
-      native.micOutputs.length ||
-      native.monitors.length ||
-      native.realMics.length
-    ) {
-      store.update({ devicesStatus: "ready", devices: native });
-      return native;
-    }
-
-    // Browser fallback keeps UI development usable when the native sidecar
-    // has not been compiled for the current platform.
-    const list = await navigator.mediaDevices.enumerateDevices();
-    const outs = list.filter((d) => d.kind === "audiooutput");
-    const ins = list.filter((d) => d.kind === "audioinput");
-    const label = (d: MediaDeviceInfo) =>
-      d.label || `Device ${d.deviceId.slice(0, 6)}`;
-    const devices = {
-      micOutputs: outs.map((d) => ({ id: d.deviceId, label: label(d) })),
-      monitors: outs.map((d) => ({ id: d.deviceId, label: label(d) })),
-      realMics: ins.map((d) => ({ id: d.deviceId, label: label(d) })),
-    };
-    store.update({
-      devicesStatus: "ready",
-      devices,
-    });
-    return devices;
+    store.update({ devicesStatus: "ready", devices: native });
+    return native;
   } catch (error) {
     store.update({
       devicesStatus:
@@ -201,7 +177,6 @@ async function refreshDevices(): Promise<AudioDevices | null> {
           : "error",
     });
   }
-  // labels are empty until permission: re-enumerate after a user gesture later.
   return null;
 }
 
@@ -224,20 +199,3 @@ function syncSystemState(alert: HTMLElement, text: HTMLElement): void {
   alert.hidden = !store.state.audioError;
   text.textContent = store.state.audioError ?? "";
 }
-
-// Re-enumerate device labels once a mic permission gesture happens anywhere.
-navigator.mediaDevices?.addEventListener?.(
-  "devicechange",
-  () =>
-    void refreshDevices().then((devices) => {
-      if (devices) void syncRoutingWithDevices(devices, store.state.settings);
-    }),
-);
-document.addEventListener(
-  "click",
-  () =>
-    void refreshDevices().then((devices) => {
-      if (devices) void syncRoutingWithDevices(devices, store.state.settings);
-    }),
-  { once: true },
-);

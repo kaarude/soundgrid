@@ -22,7 +22,12 @@ interface NativeDevice {
 
 type NativeEvent =
   | { type: "ready" }
-  | { type: "devices"; outputs: NativeDevice[]; inputs: NativeDevice[] }
+  | {
+      type: "devices";
+      requestId: number;
+      outputs: NativeDevice[];
+      inputs: NativeDevice[];
+    }
   | { type: "meter"; mic: number; monitor: number }
   | { type: "clipEnded"; bus: Bus; clipId: string }
   | { type: "error"; message: string };
@@ -40,7 +45,11 @@ export class AudioEngine {
   private process?: ChildProcessWithoutNullStreams;
   private ready = false;
   private currentSettings?: Settings;
-  private deviceWaiters: Array<(devices: AudioDevices) => void> = [];
+  private deviceWaiters = new Map<
+    number,
+    { resolve: (devices: AudioDevices) => void; timeout: NodeJS.Timeout }
+  >();
+  private nextDeviceRequestId = 0;
   private eventHandler?: (event: AudioEngineEvent) => void;
   private micMuted = false;
   private monitorMuted = false;
@@ -127,20 +136,16 @@ export class AudioEngine {
     this.eventHandler = handler;
   }
 
-  async listDevices(): Promise<AudioDevices> {
+  async listDevices(includeInputs = true): Promise<AudioDevices> {
     if (!this.ready) return emptyDevices();
     return new Promise<AudioDevices>((resolve) => {
-      const waiter = (devices: AudioDevices) => {
-        clearTimeout(timeout);
-        resolve(devices);
-      };
+      const requestId = ++this.nextDeviceRequestId;
       const timeout = setTimeout(() => {
-        const index = this.deviceWaiters.indexOf(waiter);
-        if (index >= 0) this.deviceWaiters.splice(index, 1);
+        this.deviceWaiters.delete(requestId);
         resolve(emptyDevices());
       }, this.deviceTimeout);
-      this.deviceWaiters.push(waiter);
-      this.send({ type: "listDevices" });
+      this.deviceWaiters.set(requestId, { resolve, timeout });
+      this.send({ type: "listDevices", requestId, includeInputs });
     });
   }
 
@@ -249,7 +254,7 @@ export class AudioEngine {
       const fallback = setTimeout(() => {
         if (child.exitCode === null && child.signalCode === null) child.kill();
       }, 250);
-      fallback.unref();
+      child.once("exit", () => clearTimeout(fallback));
     }
   }
 
@@ -292,7 +297,11 @@ export class AudioEngine {
         monitors: event.outputs,
         realMics: event.inputs,
       };
-      for (const resolve of this.deviceWaiters.splice(0)) resolve(devices);
+      const waiter = this.deviceWaiters.get(event.requestId);
+      if (!waiter) return;
+      clearTimeout(waiter.timeout);
+      this.deviceWaiters.delete(event.requestId);
+      waiter.resolve(devices);
     } else if (event.type === "meter") {
       this.emit({ type: "meter", mic: event.mic, monitor: event.monitor });
     } else if (event.type === "clipEnded") {

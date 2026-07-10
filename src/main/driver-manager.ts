@@ -19,7 +19,7 @@ export class DriverManager {
 
   async status(): Promise<CableStatus> {
     if (process.platform === "darwin") {
-      const devices = await this.audio.listDevices();
+      const devices = await this.audio.listDevices(false);
       const installed = devices.micOutputs.some((device) =>
         /blackhole|soundflower|loopback audio/i.test(device.label),
       );

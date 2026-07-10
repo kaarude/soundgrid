@@ -15,15 +15,14 @@ import { AudioEngine } from "./audio-engine.js";
 //                 headphone-style devices so nothing leaks to speakers.
 //   realMics    - physical microphones we mix in (passthrough).
 //
-// A full implementation uses the native WASAPI/CoreAudio enumeration. On the
-// dev platform we fall back to MediaDevices in the renderer, surfaced here
-// as an empty list and filled in lazily.
+// Enumeration is native on every platform. macOS callers may omit inputs so
+// ordinary startup never crosses the TCC microphone permission boundary.
 // ---------------------------------------------------------------------------
 
 export class DeviceManager {
   constructor(private readonly audio: AudioEngine) {}
 
-  list(): Promise<AudioDevices> {
-    return this.audio.listDevices();
+  list(includeInputs = true): Promise<AudioDevices> {
+    return this.audio.listDevices(includeInputs);
   }
 }

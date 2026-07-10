@@ -322,7 +322,7 @@ async function refreshAudioDevices(button: HTMLButtonElement): Promise<void> {
   button.disabled = true;
   button.textContent = "Refreshing…";
   try {
-    const devices = await window.soundgrid.listDevices();
+    const devices = await window.soundgrid.refreshDevices();
     const cableStatus = await window.soundgrid.getCableStatus();
     store.update({ devices, devicesStatus: "ready", cableStatus });
     const patch = reconcileAudioRouting(store.state.settings, devices);
@@ -421,16 +421,17 @@ function toggleField(
   const knob = document.createElement("span");
   knob.className = "switch-knob";
   toggle.append(knob);
-  toggle.addEventListener("click", () => {
-    const next = toggle.classList.toggle("is-on");
-    toggle.setAttribute("aria-checked", String(next));
+  toggle.addEventListener("click", async () => {
+    const next = !toggle.classList.contains("is-on");
+    toggle.disabled = true;
+    toggle.setAttribute("aria-busy", "true");
     if (next && key === "micOnly") {
-      void persistSettings({ micOnly: true, headsetOnly: false });
+      await persistSettings({ micOnly: true, headsetOnly: false });
     } else if (next && key === "headsetOnly") {
       const currentMonitor = store.state.devices.monitors.find(
         (device) => device.id === store.state.settings.monitorDeviceId,
       );
-      void persistSettings({
+      await persistSettings({
         headsetOnly: true,
         micOnly: false,
         monitorDeviceId:
@@ -442,7 +443,11 @@ function toggleField(
             : null,
       });
     } else {
-      void persistSetting(key, next);
+      await persistSetting(key, next);
+    }
+    if (toggle.isConnected) {
+      toggle.disabled = false;
+      toggle.removeAttribute("aria-busy");
     }
   });
   labelEl.append(text, toggle);

@@ -42,6 +42,7 @@ export interface SoundGridApi {
 
   // devices + native engine events
   listDevices: () => Promise<AudioDevices>;
+  refreshDevices: () => Promise<AudioDevices>;
   onAudioEvent: (handler: (event: AudioEngineEvent) => void) => () => void;
   getCableStatus: () => Promise<CableStatus>;
   installCable: () => Promise<CableStatus>;
@@ -104,6 +105,7 @@ contextBridge.exposeInMainWorld("soundgrid", {
     ipcRenderer.invoke(IPC.SETTINGS_SET, patch),
 
   listDevices: () => ipcRenderer.invoke(IPC.DEVICES_LIST),
+  refreshDevices: () => ipcRenderer.invoke(IPC.DEVICES_REFRESH),
   onAudioEvent: (handler: (event: AudioEngineEvent) => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

@@ -7,7 +7,12 @@ use serde::{Deserialize, Serialize};
     rename_all_fields = "camelCase"
 )]
 pub enum Command {
-    ListDevices,
+    ListDevices {
+        #[serde(default)]
+        request_id: u64,
+        #[serde(default = "default_true")]
+        include_inputs: bool,
+    },
     Configure {
         mic_output_device_id: Option<String>,
         monitor_device_id: Option<String>,
@@ -48,6 +53,10 @@ pub enum Command {
         volume: f32,
     },
     Shutdown,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -93,6 +102,7 @@ pub enum DeviceKind {
 pub enum Event {
     Ready,
     Devices {
+        request_id: u64,
         outputs: Vec<DeviceInfo>,
         inputs: Vec<DeviceInfo>,
     },
@@ -152,6 +162,30 @@ mod tests {
             Command::Configure {
                 monitor_enabled: false,
                 ..
+            }
+        ));
+    }
+
+    #[test]
+    fn device_listing_can_skip_permission_gated_inputs() {
+        let outputs_only: Command =
+            serde_json::from_str(r#"{"type":"listDevices","requestId":7,"includeInputs":false}"#)
+                .unwrap();
+        assert!(matches!(
+            outputs_only,
+            Command::ListDevices {
+                request_id: 7,
+                include_inputs: false
+            }
+        ));
+
+        let backwards_compatible: Command =
+            serde_json::from_str(r#"{"type":"listDevices"}"#).unwrap();
+        assert!(matches!(
+            backwards_compatible,
+            Command::ListDevices {
+                request_id: 0,
+                include_inputs: true
             }
         ));
     }
