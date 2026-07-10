@@ -1,7 +1,7 @@
 {
   "name": "soundgrid",
   "version": "0.2.0",
-  "description": "SoundGrid — an open-source soundboard for Windows and macOS that plays audio clips into your microphone stream.",
+  "description": "SoundGrid — an open-source Windows soundboard with an experimental, currently unsupported macOS preview.",
   "author": "SoundGrid Contributors",
   "license": "MIT",
   "main": "dist/main/main.js",

@@ -4,11 +4,19 @@
 [![Status](https://img.shields.io/badge/status-WIP%20/%20pre--alpha-orange)](#roadmap)
 [![Made with Electron](https://img.shields.io/badge/Electron-43-47848f.svg)](https://www.electronjs.org/)
 
-An open-source, cross-platform **soundboard** that routes audio clips directly into a virtual microphone stream — so games, Discord, OBS, and other voice applications receive the audio as if it originated from a physical microphone. No additional hardware is required.
+An open-source **soundboard** that routes audio clips directly into a virtual microphone stream — so games, Discord, OBS, and other voice applications receive the audio as if it originated from a physical microphone. No additional hardware is required.
 
-SoundGrid supports Windows and macOS with the same Cue Rack UI and feature set. It is released under the MIT license.
+> [!IMPORTANT]
+> **The macOS version is not working yet.** `v0.2.0-beta.3` is an unsupported preview and should not be treated as a functional macOS release. Known blockers are:
+>
+> 1. The microphone permission request repeats forever after either **Allow** or **Don't Allow** is selected.
+> 2. The UI does not resize with the window; the sidebar and other content can be clipped at a fixed boundary.
+>
+> Windows remains the currently supported platform. macOS support will be reconsidered only after both blockers are fixed and validated on real hardware.
 
-**[Download SoundGrid for Windows or macOS](https://github.com/kaarude/soundgrid/releases)**
+SoundGrid is released under the MIT license.
+
+**[Download SoundGrid for Windows](https://github.com/kaarude/soundgrid/releases/latest)**
 
 ---
 
@@ -43,7 +51,7 @@ Sound clip
 - **Mute / monitor-only / mic-only routing states** — distinguishable at a glance by shape and position, not color alone.
 - **Local library** — import custom clips; SoundGrid stores them in the application data directory.
 - **Audio-safe playback** — peak-normalized clips, click-safe fades, per-clip start/end trim, and soft limiting when cues overlap.
-- **Native desktop packages** — NSIS on Windows and a universal Intel/Apple Silicon DMG on macOS.
+- **Native desktop packages** — NSIS on Windows. A non-working universal Intel/Apple Silicon macOS preview is available for development testing only.
 
 ### Supported audio formats
 
@@ -144,11 +152,12 @@ For public distribution, configure `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPL
 - [x] GitHub Actions release pipeline (NSIS installer)
 - [x] Guided first-run routing setup
 - [x] Automatic update download and install
-- [x] Native CoreAudio mic/monitor routing on macOS
-- [x] Guided BlackHole setup and safe loopback auto-selection
-- [x] Universal Intel/Apple Silicon DMG and updater ZIP pipeline
+- [ ] Working native CoreAudio mic/monitor routing on macOS
+- [ ] Stable macOS microphone permission flow
+- [ ] Responsive macOS window layout without clipped content
+- [x] Universal Intel/Apple Silicon DMG and updater ZIP pipeline _(preview artifacts only)_
 
-BlackHole loopback hardware validation, Apple Developer ID credentials, and explicit public-redistribution confirmation from VB-Audio remain release gates. See [`ROADMAP.md`](ROADMAP.md).
+The macOS permission loop and broken responsive layout are release blockers. BlackHole loopback hardware validation, Apple Developer ID credentials, and explicit public-redistribution confirmation from VB-Audio also remain release gates. See [`ROADMAP.md`](ROADMAP.md).
 
 ## Development methodology
 

@@ -2,12 +2,15 @@
 
 What's left to ship, grouped by phase. Each item is a **feature/function** with a description and a goal — no implementation detail or code. Checkboxes track whether a phase is started; they are not individual tickets.
 
-**Current status (already done):** Electron + TypeScript + Vite shell; main process (window, tray, IPC, library/settings stores, hotkey manager); Rust native audio sidecar with CPAL/WASAPI and CoreAudio device I/O, Symphonia decoding, independent mic/monitor buses, real-mic passthrough, overlap modes, and real peak metering; native device enumeration; preload bridge; the full "Cue Rack" renderer UI; persisted routing; guided VB-CABLE and BlackHole setup; Windows NSIS and universal macOS DMG/ZIP packaging; cross-platform release CI.
+> [!IMPORTANT]
+> **macOS is not working or supported yet.** The current preview repeatedly requests microphone permission even after the user chooses **Allow** or **Don't Allow**, and its UI is clipped instead of resizing with the window. Both defects must be fixed and validated on real hardware before macOS support can be marked complete.
+
+**Current status (already done):** Electron + TypeScript + Vite shell; main process (window, tray, IPC, library/settings stores, hotkey manager); Rust native audio sidecar with CPAL/WASAPI and experimental CoreAudio device I/O, Symphonia decoding, independent mic/monitor buses, real-mic passthrough, overlap modes, and real peak metering; native device enumeration; preload bridge; the full "Cue Rack" renderer UI; persisted routing; guided VB-CABLE and experimental BlackHole setup; Windows NSIS and non-working macOS preview packaging; cross-platform release CI.
 
 **Locked decisions driving this roadmap:**
 
 - Audio enters the mic via a free virtual audio cable: bundled VB-CABLE on Windows and guided BlackHole setup on macOS. SoundGrid does not ship its own kernel or CoreAudio driver.
-- **Windows and macOS** are supported with the same Cue Rack UI, two-bus routing, library, hotkeys, tray controls, settings, and updater.
+- **Windows** is the currently supported platform. macOS is an experimental target and must not be described as supported until its permission flow, responsive layout, and end-to-end audio routing pass real-hardware validation.
 - **Voice changer** is a future full system: pitch/formant + effects chain + presets + per-clip voice profiles.
 
 **One hard dependency to resolve early:** we must pick a virtual audio driver we are **legally allowed to redistribute** inside an open-source installer. VB-CABLE is donationware and its redistribution terms need explicit permission; some OSS driver projects exist but are old/maintenance-only. This is decision gate **G1** (see Cross-cutting) and it gates Phase 0.
@@ -199,18 +202,18 @@ A full real-time voice transformation system on top of the existing two-bus engi
 
 ---
 
-## Phase 5 — macOS port ✅
+## Phase 5 — macOS port 🚧 _(reopened — not working)_
 
-The macOS port preserves the same product surface while using native CoreAudio and Apple platform conventions underneath.
+The macOS port aims to preserve the same product surface while using native CoreAudio and Apple platform conventions underneath. Its current preview is not functional enough for user testing.
 
-### 5.1 CoreAudio engine + loopback cable ✅ _(BlackHole hardware loopback validation pending)_
+### 5.1 CoreAudio engine + loopback cable 🚧 _(permission loop and BlackHole validation pending)_
 
-- **Description:** The existing native sidecar now runs on CoreAudio and classifies macOS devices, recommends BlackHole for mic injection, safely auto-selects loopback without ever choosing physical speakers as the mic route, and preserves the same two-bus model.
+- **Description:** The experimental native sidecar runs on CoreAudio and classifies macOS devices, recommends BlackHole for mic injection, and attempts to preserve the same two-bus model. The microphone permission request currently repeats forever after either user response, preventing further validation.
 - **Goal:** Feature parity on macOS for the core soundboard (clips → mic).
 
-### 5.2 Platform specifics ✅ _(Developer ID credentials pending)_
+### 5.2 Platform specifics 🚧 _(permission flow, responsive UI, and Developer ID credentials pending)_
 
-- **Description:** TCC microphone consent is requested when passthrough is enabled; normal global accelerators use Electron's native macOS shortcut registration without unnecessary Accessibility access; universal Intel/Apple Silicon DMG and updater ZIP builds carry hardened-runtime entitlements and notarization configuration; run-on-startup uses Login Items.
+- **Description:** Fix the repeating TCC microphone-consent flow and the window layout that clips the sidebar and content instead of resizing. Then validate global accelerators, Login Items, universal packaging, signing, and notarization on real hardware.
 - **Goal:** A first-class macOS app that respects Apple's permission model and notarization requirements.
 
 ---
@@ -255,4 +258,4 @@ The macOS port preserves the same product surface while using native CoreAudio a
 3. **Phase 3.1–3.3** (ship a Windows build + CI) — get a downloadable, signed `.exe` out.
 4. **Phase 2** (polish) — onboarding, a11y, performance, error states.
 5. **Phase 4** (voice changer) — once the core is stable and shipped.
-6. **Phase 5** (macOS) — shipped in v0.2.0; complete signed-release validation after Developer ID credentials are added.
+6. **Phase 5** (macOS) — reopened; fix the permission loop and responsive-layout defect, then complete end-to-end hardware, signing, and notarization validation.
